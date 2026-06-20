@@ -290,31 +290,37 @@ def _candidatos():
     seller = _tok["seller"]
     if not seller:
         return cand
-    # devoluções com produto em trânsito de volta (claims do tipo return)
-    offset = 0
-    for _ in range(20):
-        r = g(f"/post-purchase/v1/claims/search?seller={seller}&stage=claim&type=return&limit=50&offset={offset}")
-        results = (r or {}).get("data") or (r or {}).get("results") or []
-        if not results:
-            break
-        for c in results:
-            oid = str((c.get("resource_id") or c.get("resource") or ""))
-            if oid.startswith("2000"):
-                cand.setdefault(oid, "devolucao")
-        if len(results) < 50:
-            break
-        offset += 50
-    # não-entregas (pedidos com shipment voltando ao remetente, últimos 60 dias)
+    # devoluções: varre claims opened (em curso) + closed recentes. build_item filtra os que ainda têm produto voltando.
+    # Limita a varredura: status=opened pega tudo (alguns); closed só os mais novos via paginação curta.
+    for status, max_pages in (("opened", 40), ("closed", 6)):
+        offset = 0
+        for _ in range(max_pages):
+            r = g(f"/post-purchase/v1/claims/search?status={status}&limit=50&offset={offset}")
+            data = (r or {}).get("data") or []
+            total = ((r or {}).get("paging") or {}).get("total", 0)
+            for c in data:
+                oid = str(c.get("resource_id") or "")
+                if oid.startswith("2000"):
+                    cand.setdefault(oid, "devolucao")
+            offset += 50
+            if not data or offset >= total:
+                break
+    # não-entregas (shipments voltando, últimos 60 dias do seller)
     from datetime import timedelta
     desde = (_today() - timedelta(days=60)).isoformat()
-    r = g(f"/orders/search?seller={seller}&order.date_created.from={desde}T00:00:00.000-03:00&limit=50&sort=date_desc")
-    for e in (r or {}).get("results", []):
-        oid = str(e.get("id"))
-        shp = (e.get("shipping") or {}).get("id")
-        if shp:
-            sh = g(f"/shipments/{shp}") or {}
-            if sh.get("substatus") in VOLTA_SUB:
-                cand.setdefault(oid, "nao_entrega")
+    offset = 0
+    for _ in range(10):
+        r = g(f"/orders/search?seller={seller}&order.date_created.from={desde}T00:00:00.000-03:00&limit=50&offset={offset}&sort=date_desc")
+        results = (r or {}).get("results", [])
+        for e in results:
+            oid = str(e.get("id"))
+            shp = (e.get("shipping") or {}).get("id")
+            if shp:
+                sh = g(f"/shipments/{shp}") or {}
+                if sh.get("substatus") in VOLTA_SUB:
+                    cand.setdefault(oid, "nao_entrega")
+        if len(results) < 50: break
+        offset += 50
     return cand
 
 
