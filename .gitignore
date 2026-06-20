@@ -1,0 +1,10 @@
+cache_aguardando.json
+avaria_dryrun.log
+conferencias.json
+devolucoes.db
+service.log
+_task_result.txt
+__pycache__/
+*.pyc
+.env
+.env.local

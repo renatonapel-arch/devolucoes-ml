@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Devoluções ML · Recebimento no Galpão · Napel</title>
+<style>
+  :root{
+    --bg:#eef1f6; --card:#ffffff; --ink:#16202e; --muted:#6b7689; --muted2:#929cad;
+    --line:#e7ebf2; --brand:#2563eb; --brand-d:#1d4ed8; --brand-soft:#eef3ff;
+    --ml:#3483fa; --mlyellow:#ffe600;
+    --ok:#0f9d63; --ok-soft:#e6f7ef; --warn:#d97706; --warn-soft:#fef3e2;
+    --danger:#dc2626; --danger-soft:#fdecec; --purple:#7c3aed; --purple-soft:#f1ebfe;
+    --shadow:0 1px 2px rgba(16,24,40,.05),0 10px 30px rgba(16,24,40,.10);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;background:linear-gradient(180deg,#e7ebf3,#dfe4ee);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased}
+  .page{max-width:1180px;margin:0 auto;padding:26px 20px 60px;display:grid;grid-template-columns:430px 1fr;gap:34px;align-items:start}
+  @media(max-width:980px){.page{grid-template-columns:1fr;justify-items:center}}
+
+  /* ===== PHONE ===== */
+  .phone-wrap{position:sticky;top:26px;justify-self:center}
+  .phone{width:390px;height:800px;background:#0b1220;border-radius:46px;padding:13px;box-shadow:0 30px 70px rgba(8,15,30,.45),inset 0 0 0 2px #222c3f;position:relative}
+  .notch{position:absolute;top:13px;left:50%;transform:translateX(-50%);width:150px;height:26px;background:#0b1220;border-radius:0 0 18px 18px;z-index:30}
+  .screen{width:100%;height:100%;background:var(--bg);border-radius:34px;overflow:hidden;position:relative;display:flex;flex-direction:column}
+  .status-bar{height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600;color:#fff;background:var(--brand-d)}
+  .modebanner{padding:6px 12px;font-size:11.5px;font-weight:800;text-align:center;letter-spacing:.3px}
+  .modebanner.teste{background:#fff4e0;color:#92400e;border-bottom:1px solid #f3dcb6}
+  .modebanner.real{background:#fdecec;color:#991b1b;border-bottom:1px solid #f6cccc}
+  /* login */
+  .login-bg{position:absolute;inset:0;background:linear-gradient(135deg,var(--brand-d),var(--ml));z-index:60;display:flex;flex-direction:column;justify-content:center;padding:30px 24px;color:#fff}
+  .login-bg h2{margin:0 0 4px;font-size:21px}
+  .login-bg p{margin:0 0 22px;opacity:.85;font-size:13px}
+  .login-bg input{width:100%;padding:13px;border:0;border-radius:11px;font-size:15px;margin-bottom:16px;font-family:inherit}
+  .perfis{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+  .perfil{padding:15px 8px;border:1.5px solid rgba(255,255,255,.35);border-radius:12px;text-align:center;font-weight:700;font-size:13px;cursor:pointer;background:rgba(255,255,255,.1)}
+  .perfil.on{background:#fff;color:var(--brand-d);border-color:#fff}
+  .entrar{width:100%;padding:15px;border:0;border-radius:12px;background:#fff;color:var(--brand-d);font-weight:800;font-size:15px;cursor:pointer}
+  .userchip{font-size:11px;background:rgba(255,255,255,.18);padding:5px 10px;border-radius:999px;cursor:pointer;white-space:nowrap;color:#fff}
+  /* status tabs */
+  .tabs{display:flex;gap:6px;padding:8px 12px 2px;overflow-x:auto}
+  .tabs::-webkit-scrollbar{height:0}
+  .tab{font-size:11.5px;font-weight:700;padding:7px 11px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--muted);white-space:nowrap;cursor:pointer}
+  .tab.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  /* conf badges */
+  .cbadge{font-size:10px;font-weight:800;padding:2px 8px;border-radius:6px}
+  .cb-nao{background:#eef2f6;color:#6b7689}.cb-and{background:#fff4e0;color:#d97706}
+  .cb-ml{background:#e7f0ff;color:#1d4ed8}.cb-ok{background:#e7f7ef;color:#0f9d63}
+  .prog{font-size:10px;color:var(--muted);font-weight:700;margin-left:auto}
+  /* etapas */
+  .conf-done-top{margin:10px 12px;padding:12px;background:var(--ok-soft);color:var(--ok);border-radius:12px;font-weight:800;text-align:center;font-size:14px}
+  .etapa{border:1px solid var(--line);border-radius:12px;margin:8px 12px;overflow:hidden;background:#fff}
+  .etapa .eh{display:flex;align-items:center;gap:9px;padding:11px 13px;font-weight:700;font-size:13px}
+  .etapa .eh .en{width:22px;height:22px;border-radius:50%;background:var(--brand-soft);color:var(--brand-d);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0}
+  .etapa.done .eh .en{background:var(--ok);color:#fff}
+  .etapa.lock{opacity:.5}
+  .etapa .eb{padding:2px 13px 13px}
+  .donebadge{padding:8px 11px;background:var(--ok-soft);color:var(--ok);border-radius:9px;font-size:11.5px;font-weight:600}
+  .sige-note{font-size:11px;color:var(--warn);background:var(--warn-soft);border:1px solid #f3dcb6;border-radius:9px;padding:8px 10px;margin-bottom:9px;line-height:1.4}
+  .feito-btn{width:100%;padding:12px;border:0;border-radius:11px;background:var(--ok);color:#fff;font-weight:800;font-size:13.5px;cursor:pointer}
+  .txt-in{width:100%;padding:10px;border:1.4px solid var(--line);border-radius:9px;font-size:13px;margin-top:8px;font-family:inherit;box-sizing:border-box}
+  .desf-grid{display:flex;flex-direction:column;gap:7px;margin-top:9px}
+  .desf{padding:12px 13px;border:1.4px solid var(--line);background:#fff;border-radius:10px;font-weight:700;font-size:12.5px;cursor:pointer;text-align:left}
+  .desf:active{background:var(--brand-soft);border-color:var(--brand)}
+  /* assistente de etapas */
+  .ov-list{padding:2px 0}
+  .ov-row{display:flex;align-items:center;gap:11px;padding:11px 14px;border-bottom:1px solid #f3f5f9}
+  .ov-row:last-child{border:0}
+  .ov-row.cur{background:var(--brand-soft);cursor:pointer}
+  .ov-row.done{cursor:pointer}
+  .ov-n{width:24px;height:24px;border-radius:50%;background:#eef2f6;color:var(--muted);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0}
+  .ov-row.done .ov-n{background:var(--ok);color:#fff}
+  .ov-row.cur .ov-n{background:var(--brand);color:#fff}
+  .ov-t{font-weight:700;font-size:13px}
+  .ov-who{font-size:11px;color:var(--muted);margin-top:1px}
+  .ov-cur{font-size:10px;font-weight:800;background:var(--brand);color:#fff;padding:2px 8px;border-radius:6px}
+  .cta-step{width:100%;padding:15px;border:0;border-radius:13px;background:var(--brand);color:#fff;font-size:14.5px;font-weight:800;cursor:pointer}
+  .cta-step.feito-btn{background:var(--ok)}
+  .step-wrap{display:flex;flex-direction:column;min-height:100%}
+  .step-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 4px}
+  .step-back{font-size:13px;font-weight:700;color:var(--brand-d);cursor:pointer}
+  .step-prog{font-size:12px;color:var(--muted);font-weight:700}
+  .step-dots{display:flex;gap:6px;padding:6px 14px 0}
+  .sdot{height:5px;flex:1;border-radius:3px;background:#e4eaf2}
+  .sdot.d{background:var(--ok)}.sdot.c{background:var(--brand)}
+  .step-title{font-size:18px;font-weight:800;padding:12px 14px 4px}
+  .step-body{padding:4px 14px 14px;flex:1}
+  .lockwarn{margin:10px 12px;padding:10px 13px;background:#fff4e0;border:1px solid #f3dcb6;border-radius:11px;color:#92400e;font-size:12px;line-height:1.45}
+  .volprog{margin:10px 0 4px;padding:10px 13px;background:var(--brand-soft);border-radius:10px;font-size:13px;color:var(--brand-d)}
+  .badge-vol{font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:#e7f0ff;color:var(--brand-d)}
+  .app-head{background:linear-gradient(135deg,var(--brand-d),var(--ml));color:#fff;padding:12px 16px 14px}
+  .app-head .row1{display:flex;align-items:center;gap:10px}
+  .applogo{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;font-size:18px}
+  .app-head h1{font-size:15px;margin:0;font-weight:700;letter-spacing:.2px}
+  .app-head p{margin:1px 0 0;font-size:11.5px;opacity:.85}
+  .body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .body::-webkit-scrollbar{width:0}
+
+  /* scan bar */
+  .scanbar{margin:12px;padding:13px 14px;background:#fff;border:1.5px solid #d7e0f3;border-radius:14px;display:flex;align-items:center;gap:11px;cursor:pointer;box-shadow:var(--shadow);transition:.15s}
+  .scanbar:active{transform:scale(.99)}
+  .scanbar .ic{width:40px;height:40px;border-radius:10px;background:var(--brand-soft);color:var(--brand-d);display:flex;align-items:center;justify-content:center;font-size:20px}
+  .scanbar b{font-size:13.5px}
+  .scanbar small{display:block;color:var(--muted);font-size:11px;margin-top:1px}
+
+  /* summary chips */
+  .chips{display:flex;gap:7px;padding:0 12px 4px;flex-wrap:wrap}
+  .chip{font-size:11px;font-weight:600;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--muted);display:flex;align-items:center;gap:5px}
+  .chip b{color:var(--ink)}
+  .chip.alert{background:var(--danger-soft);border-color:#f6cccc;color:var(--danger)}
+  .chip.blue{background:var(--brand-soft);border-color:#d3e0ff;color:var(--brand-d)}
+  .chip.green{background:var(--ok-soft);border-color:#c7ecda;color:var(--ok)}
+
+  .sec-label{padding:12px 16px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted2);font-weight:700;display:flex;justify-content:space-between}
+
+  /* card devolução na lista */
+  .dcard{margin:8px 12px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 13px;box-shadow:0 1px 2px rgba(16,24,40,.04);cursor:pointer;transition:.12s;position:relative;overflow:hidden}
+  .dcard:active{transform:scale(.992);background:#fcfdff}
+  .dcard.st-red{background:#ffe1e1;border:1.5px solid #ef9a9a;padding-left:18px}
+  .dcard.st-yellow{background:#fff2c4;border:1.5px solid #e8c357;padding-left:18px}
+  .dcard.st-green{background:#cdf2dd;border:1.5px solid #7fd4a6;padding-left:18px}
+  .dcard .stripe{position:absolute;left:0;top:0;bottom:0;width:8px}
+  .dcard .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:7px}
+  .dcard .prod{font-weight:700;font-size:13px;line-height:1.3;padding-right:4px}
+  .dcard .val{font-weight:800;font-size:14px;white-space:nowrap}
+  .dcard .meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:3px}
+  .dcard .who{font-size:11.5px;color:var(--muted);margin-top:6px;display:flex;justify-content:space-between}
+  .tag{font-size:10px;padding:2px 7px;border-radius:6px;font-weight:700;letter-spacing:.2px;display:inline-flex;align-items:center;gap:3px}
+  .t-arrived{background:var(--ok-soft);color:var(--ok)}
+  .t-ship{background:#e7f0ff;color:var(--brand-d)}
+  .t-label{background:#fff4e0;color:var(--warn)}
+  .t-return{background:#f2eafe;color:var(--purple)}
+  .t-med{background:#eaf1ff;color:#3147a8}
+  .t-simple{background:#eef2f6;color:#5a6679}
+  .t-refund{background:var(--danger-soft);color:var(--danger)}
+  .t-retain{background:var(--ok-soft);color:var(--ok)}
+  .t-dest-s{background:#e7f0ff;color:var(--brand-d)}
+  .t-dest-w{background:var(--ok-soft);color:var(--ok)}
+
+  /* ===== FICHA (detail) ===== */
+  .back{display:flex;align-items:center;gap:8px;padding:11px 14px;font-weight:600;color:#fff;font-size:13.5px;cursor:pointer}
+  .ficha-hero{background:#fff;margin:0;padding:14px 16px 16px;border-bottom:1px solid var(--line)}
+  .found-by{display:inline-flex;align-items:center;gap:6px;background:var(--ok-soft);color:var(--ok);font-size:11px;font-weight:700;padding:5px 10px;border-radius:999px;margin-bottom:10px}
+  .hero-prod{display:flex;gap:12px}
+  .thumb{width:58px;height:58px;border-radius:12px;background:linear-gradient(135deg,#f0f3f9,#e3e9f3);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;border:1px solid var(--line)}
+  .hero-prod h2{font-size:16.5px;margin:0 0 5px;line-height:1.25;font-weight:800}
+  .hero-sub{font-size:12.5px;color:var(--muted);font-weight:600}
+  .hero-badges{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+  .rtag{font-size:9.5px;font-weight:700;padding:1px 7px;border-radius:5px;background:#eef2f6;color:var(--muted2);text-transform:none;letter-spacing:0;vertical-align:middle;margin-left:4px}
+  .rtag.meu{background:var(--brand-soft);color:var(--brand-d)}
+  .t-w{background:var(--ok-soft);color:var(--ok)}
+
+  .block{background:#fff;margin:10px 12px;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+  .block .bh{padding:10px 14px;font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--line);background:#fafbfd;display:flex;align-items:center;gap:7px}
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:9px 14px;border-bottom:1px solid #f3f5f9;font-size:12.5px}
+  .kv:last-child{border-bottom:0}
+  .kv .k{color:var(--muted)}
+  .kv .v{font-weight:600;text-align:right;font-variant-numeric:tabular-nums;word-break:break-all}
+  .kv .v.mono{font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:11.5px}
+  .kv .v.big{font-size:15px;font-weight:800}
+  .kv.matched{background:#fbfffe}
+  .kv.matched .v{color:var(--ok)}
+  .pill-mini{font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:5px;background:#eef2f6;color:var(--muted);margin-left:6px;vertical-align:middle}
+
+  .auto-note{font-size:10.5px;color:var(--ok);font-weight:600;display:flex;align-items:center;gap:5px;padding:8px 14px;background:var(--ok-soft)}
+
+  /* recebimento form */
+  .fld{padding:11px 14px;border-bottom:1px solid #f3f5f9}
+  .fld:last-child{border-bottom:0}
+  .fld label{font-size:11.5px;font-weight:700;color:var(--ink);display:block;margin-bottom:7px}
+  .fld label .req{color:var(--danger)}
+  .seg{display:flex;gap:7px}
+  .seg button{flex:1;padding:9px;border:1.4px solid var(--line);background:#fff;border-radius:9px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;transition:.12s}
+  .seg button.on-ok{border-color:var(--ok);background:var(--ok-soft);color:var(--ok)}
+  .seg button.on-bad{border-color:var(--warn);background:var(--warn-soft);color:var(--warn)}
+  .seg button.on-blue{border-color:var(--brand);background:var(--brand-soft);color:var(--brand-d)}
+  .photo{border:1.6px dashed #cdd7e8;border-radius:11px;padding:16px;text-align:center;color:var(--muted);font-size:12px;cursor:pointer}
+  .photo .ic{font-size:24px;display:block;margin-bottom:3px}
+
+  .cta{position:sticky;bottom:0;padding:12px;background:linear-gradient(180deg,rgba(238,241,246,0),var(--bg) 30%)}
+  .cta button{width:100%;padding:15px;border:0;border-radius:13px;background:var(--ok);color:#fff;font-size:14.5px;font-weight:800;cursor:pointer;box-shadow:0 8px 20px rgba(15,157,99,.35)}
+  .cta button:active{transform:scale(.99)}
+
+  /* ===== SCAN SHEET ===== */
+  .sheet-bg{position:absolute;inset:0;background:rgba(8,15,30,.55);z-index:40;display:none;align-items:flex-end}
+  .sheet-bg.open{display:flex}
+  .sheet{background:#fff;width:100%;border-radius:24px 24px 0 0;padding:8px 16px 20px;animation:up .22s ease}
+  @keyframes up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  .grab{width:42px;height:5px;border-radius:3px;background:#d4dae6;margin:6px auto 14px}
+  .sheet h3{margin:0 0 3px;font-size:16px}
+  .sheet p{margin:0 0 14px;font-size:12px;color:var(--muted)}
+  .scanview{height:150px;border-radius:14px;background:#0b1220;position:relative;overflow:hidden;margin-bottom:14px;display:flex;align-items:center;justify-content:center}
+  .scanview .frame{width:76%;height:80px;border:2px solid rgba(255,255,255,.5);border-radius:10px;position:relative}
+  .scanview .laser{position:absolute;left:6%;right:6%;height:2px;background:#ff4d4d;box-shadow:0 0 8px #ff4d4d;animation:scan 1.8s ease-in-out infinite}
+  @keyframes scan{0%,100%{top:18%}50%{top:78%}}
+  .scanview small{position:absolute;bottom:8px;color:rgba(255,255,255,.6);font-size:10px}
+  .scaninput{display:flex;gap:8px;margin-bottom:12px}
+  .scaninput input{flex:1;padding:12px 13px;border:1.5px solid var(--line);border-radius:11px;font-size:13px;font-family:ui-monospace,monospace}
+  .scaninput button{padding:0 16px;border:0;border-radius:11px;background:var(--brand);color:#fff;font-weight:700;font-size:13px;cursor:pointer}
+  .hint{font-size:11px;color:var(--muted);margin-bottom:8px}
+  .examples{display:flex;flex-direction:column;gap:7px;max-height:230px;overflow-y:auto}
+  .ex{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;cursor:pointer;font-size:11.5px}
+  .ex:active{background:var(--brand-soft)}
+  .ex .code{font-family:ui-monospace,monospace;font-weight:700;font-size:11px}
+  .ex .lbl{color:var(--muted);font-size:10px}
+  .ex .kind{font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:#eef2f6;color:var(--muted)}
+  .notfound{text-align:center;padding:18px 10px}
+  .notfound .big{font-size:34px}
+  .notfound h4{margin:8px 0 4px}
+  .notfound p{margin:0 0 14px}
+  .notfound .mlbtn{width:100%;padding:13px;border:0;border-radius:12px;background:var(--ml);color:#fff;font-weight:800;font-size:13.5px;cursor:pointer}
+
+  /* ===== RIGHT PANEL (explainer) ===== */
+  .panel{padding:6px 2px}
+  .panel h2{font-size:21px;margin:0 0 4px}
+  .panel .sub{color:var(--muted);margin:0 0 18px;font-size:13.5px}
+  .pcard{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:var(--shadow);margin-bottom:16px}
+  .pcard h3{margin:0 0 12px;font-size:15px;display:flex;align-items:center;gap:8px}
+  .flow{display:flex;flex-direction:column;gap:0}
+  .step{display:flex;gap:13px;position:relative;padding-bottom:16px}
+  .step:last-child{padding-bottom:0}
+  .step:not(:last-child)::before{content:"";position:absolute;left:15px;top:32px;bottom:0;width:2px;background:var(--line)}
+  .step .n{width:32px;height:32px;border-radius:50%;background:var(--brand-soft);color:var(--brand-d);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0;z-index:1}
+  .step .c b{font-size:13.5px}
+  .step .c p{margin:3px 0 0;font-size:12.5px;color:var(--muted);line-height:1.5}
+  .keylist{list-style:none;padding:0;margin:0}
+  .keylist li{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #f3f5f9;font-size:12.5px;align-items:flex-start}
+  .keylist li:last-child{border:0}
+  .keylist .kc{font-family:ui-monospace,monospace;font-size:11px;font-weight:700;background:#f3f5f9;padding:2px 7px;border-radius:6px;white-space:nowrap}
+  .note{font-size:12px;color:var(--muted);background:var(--warn-soft);border:1px solid #f3dcb6;border-radius:11px;padding:11px 13px;line-height:1.5}
+  .note b{color:var(--warn)}
+  .tip{font-size:11.5px;color:var(--muted);margin-top:14px;text-align:center}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .legend span{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px}
+  .dot{width:9px;height:9px;border-radius:3px;display:inline-block}
+
+  /* ===== CONFERÊNCIA ===== */
+  .conf-step{padding:13px 14px;border-bottom:1px solid #f3f5f9}
+  .conf-step:last-child{border-bottom:0}
+  .cs-title{font-size:13px;font-weight:800;display:flex;align-items:center;gap:8px}
+  .cs-n{width:21px;height:21px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0}
+  .cs-desc{font-size:11.5px;color:var(--muted);margin:5px 0 10px;line-height:1.45}
+  .reqtag{font-size:9.5px;font-weight:800;background:var(--danger-soft);color:var(--danger);padding:2px 7px;border-radius:6px;margin-left:auto}
+  .photogrid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+  .pslot{aspect-ratio:1;border:1.5px dashed #cdd7e8;border-radius:11px;background:#fafbff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:9.5px;color:var(--muted);cursor:pointer;font-weight:600;transition:.12s;text-align:center;padding:2px}
+  .pslot span{font-size:17px}
+  .pslot:active{transform:scale(.95)}
+  .pslot.done{border-style:solid;border-color:var(--ok);background:var(--ok-soft);color:var(--ok)}
+  .pslot.done span{font-size:19px}
+  .pslot.dmg.done{border-color:var(--danger);background:var(--danger-soft);color:var(--danger)}
+  .pslot.vid{border-color:#c9b8ef;background:#f7f3ff;color:var(--purple)}
+  .lock{opacity:.45;pointer-events:none;filter:grayscale(.4)}
+  .open-btn{width:100%;padding:12px;border:1.5px solid var(--brand);background:var(--brand-soft);color:var(--brand-d);border-radius:11px;font-size:13px;font-weight:800;cursor:pointer;margin-top:2px}
+  .open-btn:active{transform:scale(.99)}
+  .open-btn.done{border-color:var(--ok);background:var(--ok-soft);color:var(--ok);pointer-events:none}
+  .avaria-q{margin-top:12px}
+  .cs-title2{font-size:12.5px;font-weight:700;margin-bottom:8px}
+  .suggest{margin-top:13px;border:1.5px solid #d8c3f3;border-radius:13px;overflow:hidden;background:#fbf9ff}
+  .suggest-h{padding:9px 12px;font-size:11.5px;font-weight:800;color:var(--purple);background:#f3ecfe;display:flex;align-items:center;gap:7px}
+  .suggest-h span{margin-left:auto;font-size:9.5px;background:#fff;color:var(--purple);padding:2px 7px;border-radius:6px;border:1px solid #ddc9f7}
+  .suggest-txt{width:100%;border:0;background:transparent;padding:11px 12px;font-size:12px;line-height:1.5;color:var(--ink);resize:none;font-family:inherit;min-height:120px}
+  .suggest-meta{padding:8px 12px;font-size:11px;color:var(--muted);border-top:1px solid #ece1fb;background:#fff}
+  .suggest-meta b{color:var(--ink)}
+  .send-ml{margin:10px 12px 4px;width:calc(100% - 24px);padding:13px;border:0;border-radius:11px;background:var(--ml);color:#fff;font-size:13.5px;font-weight:800;cursor:pointer;box-shadow:0 6px 16px rgba(52,131,250,.35)}
+  .send-ml:active{transform:scale(.99)}
+  .send-ml.sent{background:var(--ok);box-shadow:none;pointer-events:none}
+  .suggest-note{font-size:10px;color:var(--muted);padding:4px 12px 11px;line-height:1.45}
+  .ml-review-box{padding:13px 14px}
+
+  /* ===== AUTOMAÇÕES 1/4/7 ===== */
+  .timer{display:flex;gap:11px;align-items:center;margin:10px 12px;padding:11px 13px;border-radius:13px;border:1px solid #f3dcb6;background:var(--warn-soft)}
+  .timer.media{border-color:#f3cfa0;background:#fde7d3}
+  .timer.alta{border-color:#f6cccc;background:var(--danger-soft)}
+  .timer-ic{font-size:22px}
+  .timer b{font-size:12.5px;display:block;color:var(--ink)}
+  .timer small{font-size:11px;color:var(--muted);line-height:1.4;display:block;margin-top:2px}
+  .guard{margin:10px 12px;border:1.5px solid #f6cccc;border-radius:13px;overflow:hidden;background:#fff}
+  .guard-top{background:var(--danger);color:#fff;font-size:12px;font-weight:800;padding:9px 13px}
+  .guard-row{display:flex;justify-content:space-between;padding:8px 13px;font-size:12.5px;border-bottom:1px solid #f7eaea}
+  .guard-row b{font-weight:800}
+  .guard-bar{height:6px;background:#f1e3e3;margin:0}
+  .guard-bar i{display:block;height:100%;background:linear-gradient(90deg,#f59e0b,#dc2626)}
+  .guard-note{font-size:11px;color:var(--danger);padding:9px 13px;line-height:1.45;font-weight:600}
+  .reinc{margin:0 14px 12px;padding:9px 12px;border-radius:10px;font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:7px}
+  .reinc.warn{background:var(--warn-soft);color:var(--warn);border:1px solid #f3dcb6}
+  .reinc.green{background:var(--ok-soft);color:var(--ok);border:1px solid #c7ecda}
+  .reinc.red{background:var(--danger-soft);color:var(--danger);border:1px solid #f6cccc}
+  .badge-day{font-size:10px;padding:2px 7px;border-radius:6px;font-weight:700;background:#fde7d3;color:var(--warn)}
+  .badge-reinc{font-size:10px;padding:2px 7px;border-radius:6px;font-weight:700}
+  .badge-reinc.green{background:var(--ok-soft);color:var(--ok)}
+  .badge-reinc.warn{background:#fff4e0;color:var(--warn)}
+  .badge-reinc.red{background:var(--danger-soft);color:var(--danger)}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ===================== PHONE ===================== -->
+  <div class="phone-wrap">
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="status-bar"><span>9:41</span><span>📶 🔋 100%</span></div>
+        <div id="modebanner" class="modebanner" style="display:none"></div>
+
+        <!-- ======= LOGIN ======= -->
+        <div id="login" class="login-bg" style="display:none">
+          <h2>Quem está conferindo?</h2>
+          <p>Cada etapa fica registrada com seu nome e horário.</p>
+          <input id="login-nome" placeholder="Seu nome" />
+          <div class="perfis" id="perfis">
+            <div class="perfil" onclick="pickPerfil(this,'conferente')">📦 Conferente</div>
+            <div class="perfil" onclick="pickPerfil(this,'fiscal')">🧾 Fiscal</div>
+            <div class="perfil" onclick="pickPerfil(this,'estoquista')">🏬 Estoquista</div>
+            <div class="perfil" onclick="pickPerfil(this,'gestor')">📊 Gestor</div>
+          </div>
+          <button class="entrar" onclick="entrar()">Entrar</button>
+        </div>
+
+        <!-- ======= VIEW: LISTA ======= -->
+        <div id="view-list" style="display:flex;flex-direction:column;flex:1;min-height:0">
+          <div class="app-head">
+            <div class="row1">
+              <div class="applogo">📦</div>
+              <div style="flex:1">
+                <h1>Devoluções ML · Recebimento</h1>
+                <p>Galpão Maringá · aguardando o produto voltar</p>
+              </div>
+              <div id="userchip" class="userchip" onclick="trocarUsuario()" style="margin-right:8px"></div>
+              <div onclick="carregar(true)" title="Atualizar ao vivo" style="cursor:pointer;font-size:18px;padding:6px;border-radius:9px;background:rgba(255,255,255,.16)">🔄</div>
+            </div>
+          </div>
+          <div class="tabs" id="tabs"></div>
+          <div class="body">
+            <div class="scanbar" onclick="openScan()">
+              <div class="ic">📷</div>
+              <div>
+                <b>Bipar código / QR ou digitar ID</b>
+                <small>código de barras, nº da venda, claim, envio ou rastreio</small>
+              </div>
+            </div>
+            <div class="sec-label"><span id="list-count">Aguardando recebimento</span><span style="color:var(--muted2)">toque p/ ver</span></div>
+            <div id="list"></div>
+            <div style="height:14px"></div>
+          </div>
+        </div>
+
+        <!-- ======= VIEW: FICHA ======= -->
+        <div id="view-ficha" style="display:none;flex-direction:column;flex:1;min-height:0">
+          <div style="background:linear-gradient(135deg,var(--brand-d),var(--ml))">
+            <div class="back" onclick="voltarLista()">← Voltar para a lista</div>
+          </div>
+          <div class="body" id="ficha-body"></div>
+        </div>
+
+        <!-- ======= SCAN SHEET ======= -->
+        <div class="sheet-bg" id="sheet">
+          <div class="sheet">
+            <div class="grab"></div>
+            <div id="scan-step1">
+              <h3>Bipar devolução</h3>
+              <p>Aponte para o código de barras / QR da etiqueta</p>
+              <div class="scanview"><div class="frame"><div class="laser"></div></div><small>câmera (mockup)</small></div>
+              <div class="scaninput">
+                <input id="scan-input" placeholder="ou digite qualquer ID da etiqueta" />
+                <button onclick="doSearch()">Buscar</button>
+              </div>
+              <div class="hint">Verifica em <b>todos</b> os IDs: nº venda · pack · claim · envio (47…) · rastreio (AP…BR e outros)</div>
+              <div class="sec-label" style="padding:6px 0">Toque para simular uma bipagem</div>
+              <div class="examples" id="examples"></div>
+            </div>
+            <div id="scan-notfound" style="display:none">
+              <div class="notfound">
+                <div class="big">🔍</div>
+                <h4>Não está na lista de aguardando</h4>
+                <p style="color:var(--muted);font-size:12.5px">O código <b id="nf-code" class="code"></b> não bateu com nenhuma das 13 devoluções em trânsito.</p>
+                <button class="mlbtn" onclick="mlSearch()">🔎 Buscar direto no Mercado Livre</button>
+                <div style="font-size:11px;color:var(--muted);margin-top:10px">Consulta a API do ML por esse código e traz a devolução mesmo que ainda não esteja indexada.</div>
+                <div style="margin-top:14px"><a onclick="resetScan()" style="color:var(--brand);font-weight:600;cursor:pointer;font-size:12.5px">← tentar outro código</a></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== RIGHT EXPLAINER ===================== -->
+  <div class="panel">
+    <h2>Devoluções ML — Recebimento no Galpão</h2>
+    <p class="sub"><b style="color:var(--ok)">● AO VIVO</b> · Fase 1 (só leitura). A lista vem direto da API do ML — bipe uma etiqueta real e ache a devolução. Nenhuma escrita no ML.</p>
+
+    <div class="pcard">
+      <h3>🔄 O fluxo que você descreveu</h3>
+      <div class="flow">
+        <div class="step"><div class="n">1</div><div class="c"><b>Lista do que está voltando</b><p>Todas as devoluções com o produto a caminho (hoje 13). Atualiza sozinho — some quando recebida.</p></div></div>
+        <div class="step"><div class="n">2</div><div class="c"><b>Funcionário bipa a etiqueta</b><p>Código de barras, QR ou digita qualquer ID. O sistema testa <b>todos</b> os tipos de ID até achar.</p></div></div>
+        <div class="step"><div class="n">3</div><div class="c"><b>Não está na lista? Busca no ML</b><p>Se o código não bater com nenhuma em trânsito, consulta a API do ML e traz mesmo assim.</p></div></div>
+        <div class="step"><div class="n">4</div><div class="c"><b>Ficha completa e organizada</b><p>Máximo de dados da devolução agrupados pra leitura rápida + ação de recebimento que alimenta o pipe.</p></div></div>
+      </div>
+    </div>
+
+    <div class="pcard">
+      <h3>🔑 Os IDs que a etiqueta pode trazer</h3>
+      <ul class="keylist">
+        <li><span class="kc">2000…</span><div><b>Nº da venda</b> (order/pack) — o número grande impresso</div></li>
+        <li><span class="kc">552…</span><div><b>Claim ID</b> — a chave-raiz da devolução no ML</div></li>
+        <li><span class="kc">47…</span><div><b>Cód. envio</b> Mercado Envios — o código de barras de cima</div></li>
+        <li><span class="kc">AP…BR</span><div><b>Rastreio Correios</b> (etiqueta kraft) — ou códigos de outras transportadoras</div></li>
+        <li><span class="kc">MLB…</span><div><b>Cód. do anúncio</b> — fallback extra</div></li>
+      </ul>
+      <div class="note" style="margin-top:12px">Como cada etiqueta usa um número diferente, a busca varre os 5 ao mesmo tempo. <b>Bipou → achou</b>, não importa a transportadora.</div>
+    </div>
+
+    <div class="pcard">
+      <h3>🎯 Destino: o produto vem mesmo pra você?</h3>
+      <p style="margin:0 0 8px;font-size:12.5px;color:var(--muted)">A API revela algo que a etiqueta esconde — pra onde o pacote vai:</p>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--brand)"></i> <b>🔵 Seu galpão (Maringá)</b> — chega e você bipa</span>
+        <span><i class="dot" style="background:var(--ok)"></i> <b>🟢 CD do ML (Cajamar)</b> — fica no ML, você não recebe</span>
+      </div>
+      <div class="note" style="margin-top:12px">Dos 13 de hoje: <b>6 vêm pro seu galpão</b>, <b>5 vão pro CD do ML</b>, 2 são não-entrega voltando. O painel já avisa quais esperar de fato.</div>
+    </div>
+
+    <div class="pcard">
+      <h3>🆕 3 automações que você pediu (1, 4 e 7)</h3>
+      <ul class="keylist">
+        <li><span class="kc">⏱️ 1</span><div><b>Cronômetro de contestação</b> — cada ficha mostra até quando dá pra reclamar avaria (3 dias úteis no seu galpão, 60 no CD). Passou, o prejuízo é seu.</div></li>
+        <li><span class="kc">💸 4</span><div><b>Guardião do reembolso</b> — soma o dinheiro já devolvido sem produto de volta (hoje <b style="color:var(--danger)">R$ 1.461,71</b>), mostra há quantos dias está aberto e, passando de 14 dias, abre "não recebido" no ML sozinho.</div></li>
+        <li><span class="kc">🔁 7</span><div><b>Reincidência do comprador</b> — quantas compras/devoluções ele já teve. Dado real: <b>10 dos 13 são 1ª compra já devolvendo</b>; NATHAN_AMARAL tem 3 compras (recorrente — trate bem).</div></li>
+      </ul>
+      <div class="note" style="margin-top:12px">Tudo com <b>dado real</b> dos 13 de hoje — histórico de cada comprador puxado da API do ML.</div>
+    </div>
+
+    <div class="pcard">
+      <h3>📸 Conferência com prova (novo)</h3>
+      <div class="flow">
+        <div class="step"><div class="n">1</div><div class="c"><b>Prova de chegada — antes de abrir</b><p>Fotos/vídeo do volume <b>lacrado</b>, do jeito que chegou. Trava: só abre depois de registrado.</p></div></div>
+        <div class="step"><div class="n">2</div><div class="c"><b>Abrir e checar avaria</b><p>Conferente abre e marca: sem avaria ✔ ou com avaria ⚠.</p></div></div>
+        <div class="step"><div class="n">3</div><div class="c"><b>Prova da avaria → ML</b><p>Fotos do dano. A IA <b>sugere a mensagem</b>; o conferente revisa e <b>aprova</b>.</p></div></div>
+        <div class="step"><div class="n">4</div><div class="c"><b>Envio automático ao Mercado Livre</b><p>Ao aprovar, o app sobe as fotos e abre a reclamação de avaria sozinho.</p></div></div>
+      </div>
+    </div>
+
+    <div class="pcard">
+      <h3>✅ A API do ML permite (confirmado na doc)</h3>
+      <ul class="keylist">
+        <li><span class="kc">POST</span><div>Subir provas: <code>/claims/{id}/attachments</code> — <b>≤5MB</b>, JPG/PNG/PDF</div></li>
+        <li><span class="kc">SRF2</span><div>Motivo oficial <b>"produto chegou avariado"</b> na revisão da devolução</div></li>
+        <li><span class="kc">msg</span><div>Mensagem + anexos juntos (ação <code>send_attachments</code>)</div></li>
+      </ul>
+      <div class="note" style="margin-top:12px"><b>Ressalva:</b> envio automático só vale para devolução que vem pro <b>🔵 seu galpão</b> e tem revisão disponível na janela do ML. As <b>🟢 do CD</b> o ML revisa sozinho — não há o que enviar.</div>
+    </div>
+
+    <p class="tip">📱 Mockup mobile clicável — abra uma ficha 🔵, registre as provas, marque avaria e teste o envio ao ML. Me diga o que muda.</p>
+  </div>
+</div>
+
+<script>
+let DADOS = [];  // carregado ao vivo de /api/aguardando
+
+const FASE = {
+  delivered:{t:"📍 Chegou · conferir",cls:"t-arrived",stripe:"var(--ok)"},
+  shipped:{t:"🚚 A caminho",cls:"t-ship",stripe:"var(--brand)"},
+  label_generated:{t:"🏷️ Só etiqueta",cls:"t-label",stripe:"var(--warn)"},
+  returning_to_sender:{t:"↩️ Volta ao remetente",cls:"t-return",stripe:"var(--purple)"},
+  returning_to_hub:{t:"↩️ Volta (em hub)",cls:"t-return",stripe:"var(--purple)"}
+};
+const money = v=>"R$ "+v.toFixed(2).replace(".",",");
+const dataBR = s=>{const [a,m,d]=s.split("-");return d+"/"+m+"/"+a;};
+
+function destTag(d){
+  if(d==="seller_address") return '<span class="tag t-dest-s">🔵 Maringá</span>';
+  if(d==="warehouse") return '<span class="tag t-dest-w">🟢 CD ML</span>';
+  return '';
+}
+function moneyTag(m){
+  if(m==="refunded") return '<span class="tag t-refund">⚠️ Reembolsado</span>';
+  if(m==="retained") return '<span class="tag t-retain">Retido</span>';
+  return '';
+}
+function typeTag(t){
+  if(t==="mediations") return '<span class="tag t-med">Com mediação</span>';
+  if(t==="returns") return '<span class="tag t-simple">Devolução simples</span>';
+  return '';
+}
+
+/* ===== AUTOMAÇÕES 1 / 4 / 7 (dados reais) ===== */
+const HOJE = new Date(2026,5,19); // 19/06/2026 (sexta)
+function addDiasUteis(base, n){
+  const d=new Date(base); let add=0;
+  while(add<n){ d.setDate(d.getDate()+1); const wd=d.getDay(); if(wd!==0&&wd!==6) add++; }
+  return d;
+}
+const fmtDM = dt => String(dt.getDate()).padStart(2,"0")+"/"+String(dt.getMonth()+1).padStart(2,"0");
+// #1 cronômetro de contestação de avaria
+function prazoContestacao(d){
+  if(d.tipo==="nao_entrega") return null;
+  const janela = d.destino==="warehouse" ? 60 : 3;
+  const venc = addDiasUteis(HOJE, janela);
+  return {janela, vencStr:fmtDM(venc), escopo: d.destino==="warehouse"?"após a revisão do ML":"a partir do recebimento", urg: janela<=3?"media":"baixa"};
+}
+// #4 guardião do reembolso
+function guardiao(d){
+  if(d.status_money!=="refunded") return null;
+  const dias = d.dias_aberta||0;
+  return {dias, escala: dias>=10?"alta":dias>=5?"media":"baixa", pct: Math.min(100, Math.round(dias/14*100))};
+}
+// #7 reincidência do comprador
+function reincidencia(d){
+  const c=d.compras||1, v=d.devolucoes||1;
+  if(v>1) return {nivel:"red", txt:`Devolve com frequência — ${v} devoluções`, badge:`🔁 ${v}×`};
+  if(c>1) return {nivel:"green", txt:`Cliente recorrente — ${c} compras, 1ª devolução`, badge:`🔁 ${c} compras`};
+  return {nivel:"warn", txt:"1ª compra na Napel e já devolvendo", badge:"⚠️ 1ª compra"};
+}
+
+const STATUS = {
+  nao_iniciada:{t:"Não iniciadas",cls:"cb-nao"},
+  em_andamento:{t:"Em andamento",cls:"cb-and"},
+  aguardando_ml:{t:"Aguardando ML",cls:"cb-ml"},
+  concluida:{t:"Concluídas",cls:"cb-ok"}
+};
+let FILTRO_ST="pendentes", CONTAGEM={};
+function statusCardClass(st){ return st==="concluida"?"st-green":(st==="nao_iniciada"?"st-red":"st-yellow"); }
+function statusStripe(st){ return st==="concluida"?"#10b981":(st==="nao_iniciada"?"#dc2626":"#f59e0b"); }
+function renderChips(){ renderTabs(); }
+function renderTabs(){
+  const c=CONTAGEM||{};
+  const pend=(c.em_andamento||0)+(c.aguardando_ml||0)+(c.nao_iniciada||0);
+  const tabs=[
+    ["pendentes","Pendentes",pend],
+    ["em_andamento","Em andamento",c.em_andamento||0],
+    ["aguardando_ml","Aguardando ML",c.aguardando_ml||0],
+    ["nao_iniciada","Não iniciadas",c.nao_iniciada||0],
+    ["concluida","Concluídas",c.concluida||0],
+    ["todas","Todas",DADOS.length]
+  ];
+  document.getElementById("tabs").innerHTML = tabs.map(([k,l,n])=>
+    `<span class="tab ${FILTRO_ST===k?'on':''}" onclick="setFiltroSt('${k}')">${l} <b>${n}</b></span>`).join("");
+  document.getElementById("list-count").textContent = "Devoluções";
+}
+function setFiltroSt(k){ FILTRO_ST=k; renderTabs(); renderList(); }
+function renderList(){
+  let arr;
+  if(FILTRO_ST==="pendentes"){
+    arr = DADOS.filter(d=>d.conf_status!=="concluida");
+    const rank = s => s==="nao_iniciada" ? 1 : 0;   // iniciados em cima, não iniciados embaixo
+    arr = arr.map((d,i)=>[d,i]).sort((a,b)=> rank(a[0].conf_status)-rank(b[0].conf_status) || a[1]-b[1]).map(x=>x[0]);
+  } else if(FILTRO_ST==="todas"){ arr = DADOS.slice(); }
+  else { arr = DADOS.filter(d=>d.conf_status===FILTRO_ST); }
+  if(!arr.length){ document.getElementById("list").innerHTML=`<div style="padding:26px;text-align:center;color:var(--muted)">Nada nesta aba.</div>`; return; }
+  document.getElementById("list").innerHTML = arr.map((d)=>{
+    const i=DADOS.indexOf(d);
+    const f=FASE[d.fase]||{t:d.fase,cls:"t-simple",stripe:"var(--muted)"};
+    const st=STATUS[d.conf_status]||STATUS.nao_iniciada;
+    const prog=d.conf_prog?`<span class="prog">${d.conf_prog.feito}/${d.conf_prog.total} etapas</span>`:'';
+    return `<div class="dcard ${statusCardClass(d.conf_status)}" onclick="openFicha(${i},'lista')">
+      <div class="stripe" style="background:${statusStripe(d.conf_status)}"></div>
+      <div class="top">
+        <div class="prod">${d.produto}${d.qtd>1?` <span class="pill-mini">${d.qtd} un</span>`:""}</div>
+        <div class="val">${money(d.valor)}</div>
+      </div>
+      <div class="meta">
+        <span class="cbadge ${st.cls}">${st.t}</span>${prog}
+        ${(d.vol_total>1)?`<span class="badge-vol">📦 ${d.vol_recebidos||0}/${d.vol_total} vol</span>`:""}
+        ${d.destino==="warehouse"?`<span class="tag t-w">🟢 CD ML · não confere</span>`:""}
+      </div>
+      <div class="who"><span>👤 ${d.comprador}</span></div>
+    </div>`;
+  }).join("");
+}
+
+function kvMatch(k,v,mono,matched){
+  return `<div class="kv ${matched?'matched':''}"><span class="k">${k}</span><span class="v ${mono?'mono':''}">${v}${matched?' ✓':''}</span></div>`;
+}
+
+let FICHA = {d:null, by:null, conf:null, view:"resumo", step:0, hero:"", blocks:""};
+async function openFicha(i, by){ return renderFicha(DADOS[i], by); }
+async function renderFicha(d, by){
+  FICHA.d=d; FICHA.by=by; FICHA.view="resumo"; FICHA.step=0;
+  CONF = {chegada:[], avaria:[], claim_id:d.claim_id, order_id:d.order_id};
+  try{ FICHA.conf = await (await fetch("/api/conferencia/"+encodeURIComponent(d.order_id))).json(); }
+  catch(e){ FICHA.conf = {etapas:{}, status:"nao_iniciada"}; }
+  FICHA.lockWarn = null;
+  try{ const u=getUser();
+    if(u){ const lk=await (await fetch("/api/conferencia/"+encodeURIComponent(d.order_id)+"/lock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({perfil:u.perfil,nome:u.nome})})).json();
+      if(lk && lk.anterior) FICHA.lockWarn = lk.anterior; }
+  }catch(e){}
+  const f = FASE[d.fase]||{t:d.fase};
+  const foundLabel = {order_id:"Nº da venda",pack_id:"Nº da venda (pack)",claim_id:"Claim ID",shipment_id:"Cód. envio (Mercado Envios)",tracking:"Rastreio da transportadora",item_id:"Cód. anúncio (MLB)"}[by];
+  const isMar = d.destino==="seller_address";
+  FICHA.hero = `<div class="ficha-hero">
+      <div class="hero-prod"><div class="thumb">${d.tipo==="nao_entrega"?"↩️":"📦"}</div>
+        <div><h2>${d.produto}</h2>
+          <div class="hero-sub">👤 ${d.comprador} · ${money(d.valor)}${d.qtd>1?` · ${d.qtd} un`:""}</div></div></div></div>`;
+  FICHA.blocks = "";   // dados de gestão (IDs, prazo, reembolso, reincidência) ficam só no painel do gestor
+  paintFicha();
+  document.getElementById("view-list").style.display="none";
+  document.getElementById("view-ficha").style.display="flex";
+  closeScan(true);
+}
+async function reabrirFicha(){ return renderFicha(FICHA.d, FICHA.by); }
+async function recarregarConf(){ try{ FICHA.conf = await (await fetch("/api/conferencia/"+encodeURIComponent(FICHA.d.order_id))).json(); }catch(e){} }
+function stepsList(){
+  const et=(FICHA.conf&&FICHA.conf.etapas)||{};
+  const desf=(et.abertura||{}).desfecho;
+  const ruim=["avariado","trocado","faltando","vazio"].includes(desf);
+  const arr=["chegada","abertura"];
+  if(ruim) arr.push("reclamacao_ml");
+  arr.push("nf_devolucao","financeiro","compensacao","estoque");
+  return arr;
+}
+function stepDone(key){
+  const e=((FICHA.conf&&FICHA.conf.etapas)||{})[key]||{};
+  if(key==="reclamacao_ml") return !!(e.resultado && e.resultado!=="aguardando");
+  return !!e.feito;
+}
+function firstPendingIdx(){ const s=stepsList(); for(let i=0;i<s.length;i++) if(!stepDone(s[i])) return i; return s.length; }
+function lockBanner(){
+  const w=FICHA.lockWarn; if(!w) return "";
+  return `<div class="lockwarn">⚠️ <b>${w.nome} (${w.perfil})</b> está conferindo este card agora (há ${w.ha_seg}s). Cuidado pra não fazer em dobro.</div>`;
+}
+function paintFicha(){
+  const fb=document.getElementById("ficha-body"); const d=FICHA.d;
+  if(d.destino==="warehouse"){ fb.innerHTML = lockBanner() + FICHA.hero + `<div class="block"><div class="bh">🟢 Revisão pelo Mercado Livre</div><div class="ml-review-box"><div style="font-size:12.5px;line-height:1.55">Vai para o <b>CD do ML em ${d.local}</b> e é revisado lá. Não chega no galpão — sem conferência.</div></div></div>`; fb.scrollTop=0; return; }
+  fb.innerHTML = lockBanner() + ((FICHA.view==="step") ? renderStep() : (FICHA.hero + FICHA.blocks + renderResumoConf()));
+  fb.scrollTop=0;
+}
+function iniciarConferencia(){ const s=stepsList(); FICHA.view="step"; FICHA.step=Math.min(firstPendingIdx(), s.length-1); paintFicha(); }
+function irPasso(i){ FICHA.view="step"; FICHA.step=i; paintFicha(); }
+function voltarResumo(){ FICHA.view="resumo"; paintFicha(); }
+async function avancarPasso(){
+  await recarregarConf();
+  const s=stepsList(); const idx=firstPendingIdx();
+  if(idx>=s.length){ FICHA.view="resumo"; } else { FICHA.view="step"; FICHA.step=idx; }
+  paintFicha();
+}
+function showList(){
+  document.getElementById("view-ficha").style.display="none";
+  document.getElementById("view-list").style.display="flex";
+}
+function seg(btn,kind){
+  [...btn.parentNode.children].forEach(b=>b.className="");
+  btn.className = kind==="ok"?"on-ok":kind==="bad"?"on-bad":"on-blue";
+}
+function confirmar(){
+  alert("✅ Recebimento confirmado!\n\nNo app real: move o card no pipe p/ \"Concluído\", preenche Data Recebido + Revisão + NF + Armazenado, e some desta lista.\n\n(mockup — sem ação real)");
+  showList();
+}
+
+/* ===== SCAN ===== */
+function openScan(){ resetScan(); document.getElementById("sheet").classList.add("open"); }
+function closeScan(silent){ document.getElementById("sheet").classList.remove("open"); if(!silent){} }
+function resetScan(){
+  document.getElementById("scan-step1").style.display="block";
+  document.getElementById("scan-notfound").style.display="none";
+  document.getElementById("scan-input").value="";
+}
+const FIELDS = ["order_id","pack_id","claim_id","shipment_id","tracking","item_id"];
+function findByCode(code){
+  code = (code||"").trim().toUpperCase();
+  if(!code) return null;
+  for(let i=0;i<DADOS.length;i++){
+    for(const f of FIELDS){
+      const val = (DADOS[i][f]||"").toString().toUpperCase();
+      if(val && val===code) return {i,by:f};
+    }
+  }
+  return null;
+}
+function doSearch(){
+  const code = document.getElementById("scan-input").value;
+  const hit = findByCode(code);
+  if(hit){ openFicha(hit.i, hit.by); }
+  else { document.getElementById("nf-code").textContent=code||"(vazio)"; document.getElementById("scan-step1").style.display="none"; document.getElementById("scan-notfound").style.display="block"; }
+}
+function openItem(item, by){
+  let idx = DADOS.findIndex(d=>d.order_id===item.order_id);
+  if(idx<0){ DADOS.push(item); idx = DADOS.length-1; }
+  else { DADOS[idx]=item; }
+  openFicha(idx, by);
+}
+async function mlSearch(){
+  const code = (document.getElementById("scan-input").value||document.getElementById("nf-code").textContent||"").trim();
+  const nf = document.getElementById("scan-notfound");
+  const h = nf.querySelector("h4"); const old=h.textContent; h.textContent="Buscando no Mercado Livre…";
+  try{
+    const r = await fetch(`/api/buscar?code=${encodeURIComponent(code)}&ml_fallback=1`);
+    const j = await r.json();
+    if(j.found && j.item){ openItem(j.item, j.by==="ml"?"order_id":j.by); }
+    else { alert("🔎 "+(j.hint||"Não encontrado no Mercado Livre por esse código.")); resetScan(); }
+  }catch(e){ alert("Erro ao consultar o ML: "+e); }
+  h.textContent=old;
+}
+function buildExamples(){
+  const find = pred => DADOS.find(pred);
+  const ex = [];
+  const ap = find(d=>/^AP\d+BR$/i.test(d.tracking||""));
+  const env = find(d=>/^47\d+$/.test(d.shipment_id||""));
+  const cl  = find(d=>d.claim_id);
+  const ne  = find(d=>d.tipo==="nao_entrega");
+  if(env) ex.push({code:env.shipment_id, lbl:"Cód. envio · "+env.produto.slice(0,24), kind:"47…"});
+  if(ap)  ex.push({code:ap.tracking, lbl:"Rastreio Correios · "+ap.produto.slice(0,20), kind:"AP…BR"});
+  if(DADOS[0]) ex.push({code:DADOS[0].order_id, lbl:"Nº venda · "+DADOS[0].produto.slice(0,24), kind:"2000…"});
+  if(cl)  ex.push({code:cl.claim_id, lbl:"Claim ID · "+cl.produto.slice(0,24), kind:"552…"});
+  if(ne)  ex.push({code:ne.tracking, lbl:"Rastreio · não-entrega "+ne.produto.slice(0,16), kind:"outro"});
+  ex.push({code:"99999999999", lbl:"Código inexistente → cai no \"buscar no ML\"", kind:"erro"});
+  document.getElementById("examples").innerHTML = ex.filter(e=>e.code&&e.code!=="-").map(e=>
+    `<div class="ex" onclick="document.getElementById('scan-input').value='${e.code}';doSearch()">
+       <div><div class="code">${e.code}</div><div class="lbl">${e.lbl}</div></div>
+       <span class="kind">${e.kind}</span>
+     </div>`).join("");
+}
+
+/* ===== CONFERÊNCIA / AVARIA ===== */
+/* ===== LOGIN ===== */
+function getUser(){ try{return JSON.parse(localStorage.getItem("conf_user")||"null");}catch(e){return null;} }
+function requireUser(){ const u=getUser(); if(!u){ trocarUsuario(); return null;} return u; }
+let _perfilSel=null;
+function pickPerfil(el,p){ document.querySelectorAll("#perfis .perfil").forEach(x=>x.classList.remove("on")); el.classList.add("on"); _perfilSel=p; }
+function entrar(){
+  const nome=(document.getElementById("login-nome").value||"").trim();
+  if(!nome||!_perfilSel){ alert("Digite seu nome e escolha o perfil."); return; }
+  localStorage.setItem("conf_user", JSON.stringify({nome, perfil:_perfilSel}));
+  document.getElementById("login").style.display="none";
+  renderUserChip();
+}
+function trocarUsuario(){
+  const u=getUser(); _perfilSel=u?u.perfil:null;
+  document.getElementById("login-nome").value=u?u.nome:"";
+  document.querySelectorAll("#perfis .perfil").forEach(x=>{ x.classList.remove("on"); if(u&&x.getAttribute("onclick").includes("'"+u.perfil+"'")) x.classList.add("on"); });
+  document.getElementById("login").style.display="flex";
+}
+function renderUserChip(){ const u=getUser(); const el=document.getElementById("userchip"); if(el) el.textContent = u? ("👤 "+u.nome+" · "+u.perfil) : "entrar"; }
+
+/* ===== CONFERÊNCIA (multi-etapa, persistente) ===== */
+let CONF = {chegada:[], avaria:[], claim_id:null, order_id:null};
+function rotuloDesf(x){return {certo:"✅ Certo / perfeito",avariado:"⚠️ Avariado",trocado:"🔄 Trocado / golpe",faltando:"📉 Faltando peças",vazio:"📦 Caixa vazia"}[x]||x||"—";}
+function rotuloEstoque(x){return {volta:"📥 Voltou ao estoque",descarte:"🗑 Descartado",retido:"🔒 Retido como prova"}[x]||"—";}
+function etapaWrap(n, titulo, done, body){
+  return `<div class="etapa ${done?'done':''}"><div class="eh"><span class="en">${done?'✓':n}</span>${titulo}</div><div class="eb">${body}</div></div>`;
+}
+function passoNome(key){return {chegada:"📸 Prova de chegada",abertura:"🔍 Abrir e avaliar",reclamacao_ml:"⚖️ Reclamação no ML",nf_devolucao:"🧾 Nota de devolução (SIGE)",financeiro:"💰 Financeiro (SIGE)",compensacao:"🔄 Compensação (SIGE)",estoque:"📦 Estoque"}[key]||key;}
+function passoPerfil(key){return {chegada:"conferente",abertura:"conferente",reclamacao_ml:"conferente",nf_devolucao:"fiscal",financeiro:"fiscal",compensacao:"fiscal",estoque:"estoquista"}[key]||"";}
+function renderResumoConf(){
+  const s=stepsList(); const et=(FICHA.conf&&FICHA.conf.etapas)||{};
+  const pend=firstPendingIdx(); const concluida=pend>=s.length;
+  const meuPerfil=(getUser()||{}).perfil;
+  const rows=s.map((k,i)=>{ const done=stepDone(k); const e=et[k]||{}; const cur=(i===pend&&!concluida);
+    const perfil=passoPerfil(k); const meu=(perfil===meuPerfil);
+    const who=done?`<div class="ov-who">✓ ${e.nome||""} · ${e.em||""}</div>`:(cur?`<div class="ov-who" style="color:var(--brand-d)">toque para fazer agora</div>`:"");
+    return `<div class="ov-row ${done?'done':''} ${cur?'cur':''}" onclick="${(done||cur)?`irPasso(${i})`:''}">
+      <span class="ov-n">${done?'✓':(i+1)}</span><div style="flex:1"><div class="ov-t">${passoNome(k)} <span class="rtag ${meu?'meu':''}">${perfil}</span></div>${who}</div>
+      ${cur?'<span class="ov-cur">agora</span>':''}</div>`; }).join("");
+  const btn = concluida ? `<div class="conf-done-top">✅ Conferência concluída</div>`
+    : `<div class="cta"><button class="cta-step" onclick="iniciarConferencia()">${pend===0?'▶ Iniciar conferência':'▶ Continuar — passo '+(pend+1)+' de '+s.length}</button></div>`;
+  return `<div class="block"><div class="bh">📋 Conferência <span class="prog" style="margin-left:auto">${Math.min(pend,s.length)}/${s.length} etapas</span></div><div class="ov-list">${rows}</div></div>${btn}<div style="height:8px"></div>`;
+}
+function renderStep(){
+  const s=stepsList(); let i=FICHA.step; if(i<0)i=0; if(i>=s.length)i=s.length-1;
+  const key=s[i]; const et=(FICHA.conf&&FICHA.conf.etapas)||{}; const d=FICHA.d; const done=stepDone(key);
+  const dots=s.map((k,j)=>`<span class="sdot ${stepDone(k)?'d':''} ${j===i?'c':''}"></span>`).join("");
+  const head=`<div class="step-head"><div class="step-back" onclick="voltarResumo()">← Etapas</div><div class="step-prog">Passo ${i+1} de ${s.length}</div></div>
+    <div class="step-dots">${dots}</div><div class="step-title">${passoNome(key)}</div>`;
+  const body = done ? `<div class="donebadge">${stepDoneTxt(key,et)}</div>` : stepBody(key,d,et);
+  let nav="";
+  if(done){ nav=`<div class="cta"><button class="cta-step" onclick="${i+1<s.length?`irPasso(${i+1})`:'voltarResumo()'}">${i+1<s.length?'Próximo →':'Voltar às etapas'}</button></div>`; }
+  return `<div class="step-wrap">${head}<div class="step-body">${body}</div>${nav}</div>`;
+}
+function stepDoneTxt(key,et){ const e=et[key]||{};
+  if(key==="abertura") return `Estado: <b>${rotuloDesf(e.desfecho)}</b><br>✓ ${e.nome||""} · ${e.em||""}`;
+  if(key==="reclamacao_ml") return `Reclamação: <b>${e.resultado==="ganhamos"?"✔ ganhamos":"✘ perdemos"}</b><br>✓ ${e.nome||""} · ${e.em||""}`;
+  if(key==="estoque") return `${rotuloEstoque(e.destino)} · local <b>${e.local||"—"}</b><br>✓ ${e.nome||""} · ${e.em||""}`;
+  if(key==="compensacao") return `${e.compensou?"Compensado com a venda no SIGE":"Sem compensação (não se aplica)"}<br>✓ ${e.nome||""} · ${e.em||""}`;
+  if(key==="chegada"){ const nv=(e.recebidos||1); return `${nv} volume(s) recebido(s) · ✓ ${e.nome||""} · ${e.em||""}`; }
+  return `✓ ${e.nome||""} · ${e.perfil||""} · ${e.em||""}`;
+}
+function chegadaSlots(){
+  return `<div class="photogrid">
+      <label class="pslot"><input type="file" accept="image/*" capture="environment" hidden onchange="snap(this,'chegada')"><span>＋</span>Frente</label>
+      <label class="pslot"><input type="file" accept="image/*" capture="environment" hidden onchange="snap(this,'chegada')"><span>＋</span>Verso</label>
+      <label class="pslot"><input type="file" accept="image/*" capture="environment" hidden onchange="snap(this,'chegada')"><span>＋</span>Lacre</label>
+      <label class="pslot vid"><input type="file" accept="video/*" capture="environment" hidden onchange="snap(this,'chegada')"><span>🎥</span>Vídeo</label></div>`;
+}
+function stepBody(key,d,et){
+  if(key==="chegada"){
+    const N=d.vol_total||1; const ja=(et.chegada||{}).recebidos||0;
+    if(N<=1) return `<div class="cs-desc">Fotografe o volume <b>lacrado</b>, do jeito que chegou.</div>
+      ${chegadaSlots()}
+      <div class="cta"><button class="cta-step" onclick="salvarChegada(1)">Salvar e avançar →</button></div>`;
+    return `<div class="cs-desc">Esta devolução tem <b>${N} volumes</b>. Fotografe e registre <b>cada caixa</b> que chegar.</div>
+      <div class="volprog">📦 Recebidos <b>${ja}</b> de <b>${N}</b> volumes${ja>0&&ja<N?` · <span style="color:var(--warn)">faltam ${N-ja}</span>`:""}</div>
+      <div class="cs-desc" style="margin-top:8px;font-weight:700">Fotos do volume ${ja+1}:</div>
+      ${chegadaSlots()}
+      <div class="cta">
+        <button class="cta-step" onclick="registrarVolume(${ja+1},${N})">✓ Registrar volume ${ja+1} de ${N}</button>
+        ${ja>0&&ja<N?`<button class="cta-step" style="background:var(--warn);margin-top:8px" onclick="voltarLista()">Faltam ${N-ja} — receber o resto depois (parcial)</button>`:""}
+      </div>`;
+  }
+  if(key==="abertura") return `<div class="cs-desc">Confira se bate com a venda e informe o estado encontrado:</div>
+    <div class="desf-grid">
+      <button class="desf" onclick="salvarAbertura('certo')">✅ Certo / perfeito</button>
+      <button class="desf" onclick="salvarAbertura('avariado')">⚠️ Avariado</button>
+      <button class="desf" onclick="salvarAbertura('trocado')">🔄 Trocado / não é o nosso (golpe)</button>
+      <button class="desf" onclick="salvarAbertura('faltando')">📉 Faltando peças</button>
+      <button class="desf" onclick="salvarAbertura('vazio')">📦 Caixa vazia</button></div>`;
+  if(key==="reclamacao_ml"){ const rc=et.reclamacao_ml||{};
+    if(rc.enviado && (!rc.resultado||rc.resultado==="aguardando")) return `<div class="donebadge" style="background:var(--brand-soft);color:var(--brand-d)">🔵 Aguardando resposta do ML · enviado por ${rc.nome||"?"} · ${rc.em||""}</div>
+      <div class="cs-desc" style="margin-top:10px">Quando o ML responder, registre o resultado:</div>
+      <div class="seg"><button onclick="salvarResultadoML('ganhamos')">✔ Ganhamos</button><button onclick="salvarResultadoML('perdemos')">✘ Perdemos</button></div>
+      <div class="suggest-note" style="margin-top:10px">Pode voltar (← Etapas) — o card fica em "Aguardando ML" até o ML responder.</div>`;
+    return `<div class="cs-desc">Fotografe o dano e envie a reclamação ao ML.</div>
+      <div class="photogrid">
+        <label class="pslot dmg"><input type="file" accept="image/*" capture="environment" hidden onchange="snap(this,'avaria')"><span>＋</span>Dano 1</label>
+        <label class="pslot dmg"><input type="file" accept="image/*" capture="environment" hidden onchange="snap(this,'avaria')"><span>＋</span>Dano 2</label>
+        <label class="pslot dmg vid"><input type="file" accept="video/*" capture="environment" hidden onchange="snap(this,'avaria')"><span>🎥</span>Vídeo</label></div>
+      <div class="suggest"><div class="suggest-h">🤖 Mensagem sugerida <span>rascunho</span></div>
+        <textarea class="suggest-txt">${sugerirMensagem(d)}</textarea>
+        <div class="suggest-meta">Motivo <b>SRF2</b> · anexa as fotos</div></div>
+      <div class="cta"><button class="cta-step send-ml" onclick="enviarReclamacao(this)">✅ Aprovar e enviar ao ML</button></div>`;
+  }
+  if(key==="nf_devolucao"||key==="financeiro"){ const lbl=key==="nf_devolucao"?"Emita a NF de devolução no SIGE.":"Lance o financeiro da devolução no SIGE.";
+    return `<div class="sige-note">⚠️ Feito na <b>tela do SIGE</b> — o app não escreve no SIGE. Faça lá e confirme aqui.</div>
+      <div class="cs-desc">${lbl}</div>
+      <div class="cta"><button class="cta-step feito-btn" onclick="salvarSige('${key}')">✔ Feito no SIGE — avançar →</button></div>`; }
+  if(key==="compensacao"){ const sm=FICHA.d.status_money;
+    const hint = sm==="refunded"?'<b>O ML já reembolsou</b> o comprador.':(sm==="retained"?'O dinheiro está <b>retido</b> no ML.':'');
+    return `<div class="sige-note">⚠️ Decisão feita na <b>tela do SIGE</b> — o app não escreve no SIGE.</div>
+      <div class="cs-desc">Às vezes o financeiro da devolução precisa ser <b>compensado/abatido com o financeiro da venda</b> original — outras vezes não (depende se a venda já foi paga e se o MP já reembolsou). ${hint}</div>
+      <div class="cs-desc" style="margin-top:8px;font-weight:800;color:var(--ink)">Esta devolução precisa compensar com a venda?</div>
+      <div class="desf-grid">
+        <button class="desf" onclick="salvarCompensacao(true)">✅ Sim — compensei no SIGE</button>
+        <button class="desf" onclick="salvarCompensacao(false)">⏭️ Não se aplica (sem compensação)</button>
+      </div>`; }
+  if(key==="estoque") return `<div class="cs-desc">Guarde a peça e informe o destino + onde guardou.</div>
+    <div class="seg" id="est-dest">
+      <button onclick="seg(this,'ok')" data-v="volta">📥 Volta ao estoque</button>
+      <button onclick="seg(this,'bad')" data-v="descarte">🗑 Descartado</button>
+      <button onclick="seg(this,'blue')" data-v="retido">🔒 Retido</button></div>
+    <input class="txt-in" id="est-local" placeholder="Onde guardou? (prateleira / gaiola / posição)">
+    <div class="cta"><button class="cta-step" onclick="salvarEstoque()">✔ Guardado — concluir</button></div>`;
+  return "";
+}
+
+/* ===== câmera ===== */
+function _downscale(durl, cb){
+  const img=new Image();
+  img.onload=()=>{ const max=1280; let w=img.width,h=img.height;
+    if(w>max||h>max){ const s=max/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+    const c=document.createElement("canvas"); c.width=w; c.height=h;
+    c.getContext("2d").drawImage(img,0,0,w,h); cb(c.toDataURL("image/jpeg",0.8)); };
+  img.onerror=()=>cb(durl); img.src=durl;
+}
+function snap(input, tipo){
+  const file = input.files && input.files[0]; if(!file) return;
+  const slot = input.closest(".pslot");
+  const isVid = (file.type||"").startsWith("video");
+  const r = new FileReader();
+  r.onload = e=>{
+    const set = ()=>{ slot.classList.add("done"); const sp=slot.querySelector("span"); if(sp) sp.textContent=isVid?"🎬":"✅"; };
+    if(isVid){ set(); return; }
+    _downscale(e.target.result, durl=>{
+      (tipo==="avaria"?CONF.avaria:CONF.chegada).push(durl);
+      slot.style.backgroundImage=`url(${durl})`; slot.style.backgroundSize="cover"; slot.style.backgroundPosition="center"; set();
+    });
+  };
+  r.readAsDataURL(file);
+}
+
+/* ===== handlers que SALVAM cada etapa ===== */
+async function postEtapa(etapa, dados){
+  const u=requireUser(); if(!u) return null;
+  const r=await fetch("/api/conferencia/"+encodeURIComponent(FICHA.d.order_id)+"/etapa",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({etapa, dados, perfil:u.perfil, nome:u.nome})});
+  return await r.json();
+}
+async function salvarChegada(recebidos){
+  if(!requireUser()) return;
+  if(CONF.chegada.length<1){ alert("📸 Tire ao menos 1 foto da chegada."); return; }
+  const N=FICHA.d.vol_total||1; const r=recebidos||1;
+  await postEtapa("chegada", {recebidos:r, vol_total:N, anexos:CONF.chegada, feito: r>=N}); avancarPasso();
+}
+async function registrarVolume(n, N){
+  if(!requireUser()) return;
+  if(CONF.chegada.length<1){ alert("📸 Tire ao menos 1 foto deste volume."); return; }
+  await postEtapa("chegada", {recebidos:n, vol_total:N, anexos:CONF.chegada, feito: n>=N});
+  CONF.chegada=[];                       // zera p/ o próximo volume
+  if(n>=N){ avancarPasso(); }
+  else { await recarregarConf(); paintFicha(); }   // continua na etapa, mostra n recebidos
+}
+async function salvarAbertura(desf){ if(!requireUser()) return; await postEtapa("abertura", {desfecho:desf}); avancarPasso(); }
+async function enviarReclamacao(btn){
+  if(!requireUser()) return;
+  if(CONF.avaria.length<1){ alert("📸 Tire ao menos 1 foto do dano."); return; }
+  const msg=(document.querySelector("#view-ficha .suggest-txt")||{}).value||"";
+  btn.textContent="enviando…"; btn.style.pointerEvents="none";
+  try{
+    const r=await fetch("/api/avaria",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({claim_id:FICHA.d.claim_id, mensagem:msg, fotos:CONF.avaria})});
+    const j=await r.json();
+    await postEtapa("reclamacao_ml", {enviado:true, resultado:"aguardando", anexos:CONF.avaria, anexo_tipo:"avaria", modo:j.mode});
+    alert(j.mode==="teste" ? ("🧪 MODO TESTE — nada foi ao ML.\nReclamação registrada (SRF2, "+CONF.avaria.length+" foto(s)).\nO card foi para \"Aguardando ML\".") : ("✅ Enviado ao ML (modo real). Anexos: "+(j.anexos_enviados||[]).length));
+    avancarPasso();
+  }catch(e){ btn.style.pointerEvents=""; alert("Erro: "+e); }
+}
+async function salvarResultadoML(res){ if(!requireUser())return; await postEtapa("reclamacao_ml",{enviado:true,resultado:res}); avancarPasso(); }
+async function salvarSige(key){ if(!requireUser())return; await postEtapa(key,{}); avancarPasso(); }
+async function salvarCompensacao(compensou){ if(!requireUser())return; await postEtapa("compensacao",{compensou:!!compensou}); avancarPasso(); }
+async function salvarEstoque(){
+  if(!requireUser())return;
+  const sel=document.querySelector("#est-dest button.on-ok,#est-dest button.on-bad,#est-dest button.on-blue");
+  const dest = sel? sel.getAttribute("data-v") : null;
+  const local=(document.getElementById("est-local")||{}).value||"";
+  if(!dest){ alert("Escolha o destino (voltou / descartado / retido)."); return; }
+  await postEtapa("estoque",{destino:dest, local}); avancarPasso();
+}
+function voltarLista(){ showList(); carregar(false); }
+function sugerirMensagem(d){
+  return `Olá. Recebemos a devolução do pedido ${d.order_id} — "${d.produto}". `+
+`Registramos em foto/vídeo o volume lacrado, do jeito que chegou. Ao abrir, constatamos problema: [descreva]. `+
+`Seguem as evidências da embalagem e do dano. O item retornou fora das condições em que foi enviado. `+
+`Solicitamos a análise da devolução. Claim: ${d.claim_id||"-"}.`;
+}
+
+/* ===== CARGA AO VIVO (Fase 1, leitura) ===== */
+async function carregar(refresh){
+  const lista = document.getElementById("list");
+  lista.innerHTML = `<div style="padding:30px 16px;text-align:center;color:var(--muted)">⏳ Carregando devoluções ao vivo do Mercado Livre…<br><small>(primeira carga pode levar alguns segundos)</small></div>`;
+  document.getElementById("list-count").textContent = "Aguardando recebimento…";
+  try{
+    const r = await fetch("/api/aguardando"+(refresh?"?refresh=1":""));
+    const j = await r.json();
+    DADOS = j.itens||[];
+    CONTAGEM = j.contagem||{};
+    renderChips(); renderList(); buildExamples();
+    const c = document.getElementById("list-count");
+    if(j.atualizado) c.textContent = `Aguardando recebimento (${DADOS.length}) · ao vivo ${j.atualizado}`;
+  }catch(e){
+    lista.innerHTML = `<div style="padding:30px 16px;text-align:center;color:var(--danger)">Erro ao carregar: ${e}<br><small>O backend está rodando? (uvicorn na porta 8078)</small></div>`;
+  }
+}
+async function initMode(){
+  try{
+    const j = await (await fetch("/api/mode")).json();
+    const b = document.getElementById("modebanner");
+    b.style.display="block";
+    if(j.mode==="real"){ b.className="modebanner real"; b.textContent="🔴 MODO REAL — envios de avaria VÃO para o Mercado Livre"; }
+    else { b.className="modebanner teste"; b.textContent="🧪 MODO TESTE — nada é enviado ao Mercado Livre"; }
+  }catch(e){}
+}
+initMode();
+renderUserChip();
+if(!getUser()) trocarUsuario();
+carregar(false);
+</script>
+</body>
+</html>

@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Devoluções ML · Painel do Gestor · Clavis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ===== Design System Napel/Clavis — tokens (napel.css) ===== */
+  :root{
+    --naval:#113C58; --noite:#042C48; --ceu:#7DA4C6; --ceu-claro:#B5D4E8; --gelo:#EBF7FA;
+    --ink-50:#F6FBFC; --ink-100:#EBF7FA; --ink-200:#D6E7F1; --ink-300:#B5D4E8; --ink-400:#7DA4C6;
+    --ink-500:#3D6889; --ink-600:#27557A; --ink-700:#113C58; --ink-800:#0A3450; --ink-900:#042C48;
+    --page-bg:#FAFCFD; --border:#E4EEF3; --border-strong:#CFDEE7;
+    --success:#10B981; --success-fg:#065F46; --success-bg:#D1FAE5;
+    --warn:#F59E0B; --warn-fg:#92400E; --warn-bg:#FEF3C7;
+    --danger:#EF4444; --danger-fg:#991B1B; --danger-bg:#FEE2E2;
+    --info:#7DA4C6; --info-fg:#113C58; --info-bg:#EBF7FA;
+    --ml-amarelo:#FFE600; --ml-azul:#3483FA;
+    --font-sans:'Saira',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --r-sm:6px; --r-md:8px; --r-lg:12px; --r-xl:16px;
+    --sh-sm:0 1px 2px rgba(4,44,72,.06),0 1px 3px rgba(4,44,72,.04);
+    --sh-md:0 4px 12px rgba(4,44,72,.08),0 2px 4px rgba(4,44,72,.04);
+    --sh-lg:0 10px 30px rgba(4,44,72,.12),0 4px 10px rgba(4,44,72,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font-sans);background:var(--page-bg);color:var(--ink-900);font-size:13.5px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  .mono{font-family:var(--font-mono);font-feature-settings:'tnum' on,'lnum' on}
+  :focus-visible{outline:2px solid var(--naval);outline-offset:2px;border-radius:var(--r-sm)}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:var(--ink-200);border-radius:8px}
+  ::-webkit-scrollbar-thumb:hover{background:var(--ink-300)}
+  .wrap{max-width:1500px;margin:0 auto;padding:24px 28px 60px}
+
+  /* ===== ClavisPage header ===== */
+  .cl-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+  .cl-title{display:flex;align-items:center;gap:15px}
+  .cl-icon{width:56px;height:56px;border-radius:var(--r-xl);background:var(--naval);display:flex;align-items:center;justify-content:center;color:#fff;font-size:25px;box-shadow:var(--sh-md)}
+  .cl-title h1{font-size:24px;line-height:30px;margin:0;font-weight:700;color:var(--ink-900);letter-spacing:-.2px}
+  .cl-title p{margin:3px 0 0;color:var(--ink-500);font-size:13.5px}
+  .cl-actions{display:flex;align-items:center;gap:10px}
+  .live{font-size:12px;color:var(--success-fg);font-weight:600;display:flex;align-items:center;gap:7px;background:var(--success-bg);padding:6px 12px;border-radius:999px}
+  .live .dot{width:8px;height:8px;border-radius:50%;background:var(--success);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.5)}70%{box-shadow:0 0 0 7px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+  .btn{padding:9px 15px;border-radius:var(--r-lg);font-weight:500;font-size:13px;transition:all .15s;cursor:pointer;border:1px solid transparent;text-decoration:none;display:inline-flex;align-items:center;gap:7px;font-family:inherit}
+  .btn-primary{background:var(--naval);color:#fff}.btn-primary:hover{background:var(--ink-600)}
+  .btn-secondary{background:var(--ink-100);color:var(--ink-900);border-color:var(--border)}.btn-secondary:hover{background:var(--ink-200)}
+
+  /* ===== KpiRow / KpiCard ===== */
+  .kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:18px}
+  .kpi{background:#fff;border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--sh-sm);padding:16px 18px;position:relative;overflow:hidden}
+  .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--naval)}
+  .kpi.v-danger::before{background:var(--danger)} .kpi.v-success::before{background:var(--success)}
+  .kpi.v-warn::before{background:var(--warn)} .kpi.v-info::before{background:var(--ceu)}
+  .kpi .ic{position:absolute;right:14px;top:14px;font-size:19px;opacity:.45}
+  .kpi .lbl{font-size:11px;line-height:16px;color:var(--ink-500);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+  .kpi .val{font-size:30px;line-height:1;font-weight:800;margin-top:8px;color:var(--ink-900);letter-spacing:-.5px}
+  .kpi.v-danger .val{color:var(--danger-fg)} .kpi.v-success .val{color:var(--success-fg)}
+  .kpi .sub{font-size:11px;color:var(--ink-500);margin-top:6px}
+
+  .cols{display:grid;grid-template-columns:1fr 366px;gap:16px;align-items:start}
+  .gtabs{display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--border)}
+  .gtab{padding:10px 18px;font-size:14px;font-weight:700;color:var(--ink-500);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .gtab:hover{color:var(--ink-700)}
+  .gtab.on{color:var(--naval);border-bottom-color:var(--naval)}
+  .ana-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+  @media(max-width:1100px){.ana-grid{grid-template-columns:1fr}}
+  .card{background:#fff;border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--sh-sm);margin-bottom:16px;overflow:hidden}
+  .card .hd{padding:14px 18px;border-bottom:1px solid var(--border);font-weight:700;font-size:14px;color:var(--ink-900);display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .card .hd .sub{font-weight:400;color:var(--ink-400);font-size:11.5px}
+
+  /* ===== FilterBar ===== */
+  .filterbar{display:flex;gap:8px;flex-wrap:wrap}
+  .fbtn{font-size:12px;line-height:16px;font-weight:500;padding:6px 13px;border-radius:999px;border:1px solid var(--border-strong);background:#fff;color:var(--ink-600);cursor:pointer;transition:.12s}
+  .fbtn:hover{background:var(--gelo)}
+  .fbtn.on{background:var(--naval);border-color:var(--naval);color:#fff}
+
+  /* ===== DataTable ===== */
+  table{width:100%;border-collapse:collapse}
+  thead th{position:sticky;top:0;background:var(--ink-50);text-align:left;font-size:11px;line-height:16px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-600);font-weight:700;padding:11px 16px;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+  thead th:hover{color:var(--naval);background:var(--ink-100)}
+  thead th .ar{opacity:.4;font-size:9px;margin-left:3px}
+  thead th.sorted .ar{opacity:1}
+  tbody td{padding:11px 16px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:13px}
+  tbody tr:nth-child(even){background:var(--ink-50)}
+  tbody tr:hover{background:var(--gelo)}
+  .num{text-align:right;white-space:nowrap}
+  .prod{font-weight:500;max-width:280px;color:var(--ink-900)}
+  .sub-id{font-size:10px;color:var(--ink-400);margin-top:2px}
+
+  /* StatusPill / Badge ===== */
+  .pill{font-size:10px;line-height:14px;padding:3px 9px;border-radius:var(--r-sm);font-weight:600;white-space:nowrap;display:inline-block}
+  .p-naval{background:var(--gelo);color:var(--naval)} .p-info{background:var(--info-bg);color:var(--info-fg)}
+  .p-success{background:var(--success-bg);color:var(--success-fg)} .p-warn{background:var(--warn-bg);color:var(--warn-fg)}
+  .p-danger{background:var(--danger-bg);color:var(--danger-fg)} .p-muted{background:var(--ink-100);color:var(--ink-500)}
+  .p-ml{background:var(--ml-azul);color:#fff}
+  .days{font-weight:700;font-variant-numeric:tabular-nums} .days.hot{color:var(--danger-fg)}
+
+  /* right widgets ===== */
+  .row{display:flex;justify-content:space-between;align-items:center;padding:10px 18px;border-bottom:1px solid var(--border);font-size:13px}
+  .row:last-child{border:0}
+  .bar{height:7px;border-radius:4px;background:var(--ink-100);overflow:hidden;margin-top:6px}
+  .bar i{display:block;height:100%;border-radius:4px;background:var(--naval)}
+  .miniprod{padding:11px 18px;border-bottom:1px solid var(--border)} .miniprod:last-child{border:0}
+  .miniprod .t{display:flex;justify-content:space-between;font-size:13px;font-weight:500;gap:8px;color:var(--ink-900)}
+  .alert-row{display:flex;gap:12px;padding:11px 18px;border-bottom:1px solid var(--border);align-items:center}
+  .alert-row:last-child{border:0}
+  .alert-row .av{font-weight:800;color:var(--danger-fg);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .alert-row .ad{font-size:11.5px;color:var(--ink-500);margin-top:2px}
+
+  /* histórico ===== */
+  .hist{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:20px;padding:18px}
+  .hist h4{font-size:12px;font-weight:700;color:var(--ink-600);margin:0 0 10px;text-transform:uppercase;letter-spacing:.4px}
+  .barchart{display:flex;align-items:flex-end;gap:10px;height:120px}
+  .barchart .b{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;justify-content:flex-end}
+  .barchart .b .col{width:64%;background:linear-gradient(180deg,var(--ceu),var(--naval));border-radius:5px 5px 0 0;min-height:3px}
+  .barchart .b small{font-size:10px;color:var(--ink-400)} .barchart .b b{font-size:11px;color:var(--ink-700)}
+  .stat-line{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+  .stat-line:last-child{border:0} .stat-line b{color:var(--ink-900)}
+  .muted{color:var(--ink-400)}
+  .loading{padding:44px;text-align:center;color:var(--ink-400)}
+  .cmodal{position:fixed;inset:0;background:rgba(4,44,72,.45);z-index:80;display:flex;align-items:center;justify-content:center;padding:24px}
+  .cmodal-box{background:#fff;border-radius:var(--r-xl);box-shadow:var(--sh-lg);width:520px;max-width:100%;max-height:88vh;overflow-y:auto}
+  .cm-head{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .cm-head h3{margin:0;font-size:16px;font-weight:700}
+  .cm-head .x{cursor:pointer;font-size:20px;color:var(--ink-400);line-height:1}
+  .cm-step{display:flex;gap:12px;padding:12px 20px;border-bottom:1px solid var(--border)}
+  .cm-step:last-child{border:0}
+  .cm-ic{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0;background:var(--ink-100);color:var(--ink-500)}
+  .cm-step.done .cm-ic{background:var(--success);color:#fff}
+  .cm-t{font-weight:700;font-size:13.5px}
+  .cm-d{font-size:12px;color:var(--ink-500);margin-top:2px}
+  .cm-who{font-size:11.5px;color:var(--ink-400);margin-top:3px}
+  .cm-secao{padding:12px 20px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-500);border-top:1px solid var(--border)}
+  .cm-anexos{padding:6px 20px 10px}
+  .cm-atit{font-size:12px;font-weight:600;color:var(--ink-700);margin-bottom:6px}
+  .cm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:7px}
+  .cm-thumb{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer}
+  .lightbox{position:fixed;inset:0;background:rgba(4,44,72,.85);z-index:90;display:none;align-items:center;justify-content:center;padding:24px;cursor:zoom-out}
+  .lightbox img{max-width:100%;max-height:100%;border-radius:8px}
+  @media(max-width:1100px){.kpi-row{grid-template-columns:repeat(2,1fr)}.cols{grid-template-columns:1fr}.hist{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="cl-head">
+    <div class="cl-title">
+      <div class="cl-icon">📊</div>
+      <div>
+        <h1>Devoluções ML — Painel do Gestor</h1>
+        <p>Napel · NAPEL_OFICIAL · visão de oversight (não operacional)</p>
+      </div>
+    </div>
+    <div class="cl-actions">
+      <span class="live"><span class="dot"></span><span id="livestamp">carregando…</span></span>
+      <a class="btn btn-secondary" href="/" target="_blank">📱 Versão conferente</a>
+      <button class="btn btn-primary" onclick="load(true)">🔄 Atualizar</button>
+    </div>
+  </header>
+
+  <div class="kpi-row" id="kpis"><div class="loading" style="grid-column:1/-1">⏳ Carregando dados ao vivo do Mercado Livre…</div></div>
+
+  <div class="gtabs">
+    <span class="gtab on" id="gt-dev" onclick="showTab('dev')">📋 Devoluções voltando agora</span>
+    <span class="gtab" id="gt-ana" onclick="showTab('ana')">📊 Análises</span>
+    <span class="gtab" id="gt-hist" onclick="showTab('hist')">📈 Histórico do processo</span>
+  </div>
+
+  <div id="tab-dev">
+    <div class="card">
+      <div class="hd">
+        <span>Devoluções voltando agora <span class="sub" id="tbl-count"></span></span>
+        <div class="filterbar" id="filters"></div>
+      </div>
+      <div style="overflow-x:auto">
+        <table id="tbl">
+          <thead><tr>
+            <th data-k="conf_status">Conferência</th>
+            <th data-k="fase">Fase</th>
+            <th data-k="produto">Produto</th>
+            <th data-k="valor" class="num">Valor</th>
+            <th data-k="comprador">Comprador</th>
+            <th data-k="destino">Destino</th>
+            <th data-k="status_money">Dinheiro</th>
+            <th data-k="dias_aberta" class="num">Dias</th>
+            <th data-k="devolucoes">Histórico</th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-ana" style="display:none">
+    <div class="ana-grid">
+      <div class="card">
+        <div class="hd">💸 Risco financeiro <span class="sub">reembolsado, produto não chegou</span></div>
+        <div id="alertas"></div>
+      </div>
+      <div class="card">
+        <div class="hd">📦 Mais devolvidos <span class="sub">lote atual</span></div>
+        <div id="topprod"></div>
+      </div>
+      <div class="card">
+        <div class="hd">🔁 Compradores recorrentes</div>
+        <div id="reinc"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-hist" style="display:none">
+    <div class="card">
+      <div class="hd">📈 Histórico do processo <span class="sub">281 devoluções concluídas · base do pipe Pipefy</span></div>
+      <div class="hist">
+        <div><h4>Devoluções por mês</h4><div class="barchart" id="barmes"></div></div>
+        <div><h4>Nota fiscal de devolução</h4><div id="histnf"></div><h4 style="margin-top:18px">Indicadores</h4><div id="histstats"></div></div>
+        <div><h4>Top motivos de devolução</h4><div id="histmot"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="confmodal" class="cmodal" style="display:none" onclick="if(event.target===this)closeConfDetail()">
+  <div class="cmodal-box"><div id="confmodal-body"></div></div>
+</div>
+
+<script>
+const HIST = {
+  total:281, valor:59237.31, ticket:216,
+  mes:[["nov/25",27],["dez/25",15],["jan/26",33],["fev/26",44],["mar/26",49],["abr/26",44],["mai/26",38],["jun/26",31]],
+  nf:[["Nota SIGE",232,"var(--naval)"],["Emitida ML",34,"var(--ceu)"],["Erro ML",9,"var(--danger)"],["Não emitida",1,"var(--ink-300)"]],
+  motivos:[["Chegou bem mas reclamou",66],["Entrega impossível (retornou)",47],["Cliente desistiu",21],["Se arrependeu",13],["Não conforme o anúncio",10],["Não quer mais",9],["Cor/tam./modelo errado",7],["Recebeu outro produto",6]],
+  reputacao:18, armazenado:275, descartado:1
+};
+const money = v => "R$ " + Number(v||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+const dataBR = s => { if(!s) return "—"; const [a,m,d]=s.split("-"); return d+"/"+m+"/"+a; };
+const FASE = {
+  delivered:{t:"📍 Chegou",c:"p-success",r:-1}, shipped:{t:"🚚 A caminho",c:"p-info",r:0},
+  label_generated:{t:"🏷️ Só etiqueta",c:"p-warn",r:1},
+  returning_to_sender:{t:"↩️ Volta remet.",c:"p-naval",r:2}, returning_to_hub:{t:"↩️ Volta hub",c:"p-naval",r:2}
+};
+const fz = f => FASE[f] || {t:f,c:"p-info",r:3};
+function reinc(d){ const c=d.compras||1, v=d.devolucoes||1;
+  if(v>1) return {cls:"p-danger",txt:`${v}× devoluções`}; if(c>1) return {cls:"p-success",txt:`${c} compras`};
+  return {cls:"p-warn",txt:"1ª compra"}; }
+
+let DADOS=[], filtro="todos", sortK="dias_aberta", sortDir=-1, CONTAGEM={};
+const CONFST={nao_iniciada:{t:"⚪ Não iniciada",c:"p-danger"},em_andamento:{t:"🟡 Em andamento",c:"p-warn"},aguardando_ml:{t:"🔵 Aguardando ML",c:"p-info"},concluida:{t:"🟢 Concluída",c:"p-success"}};
+
+async function load(refresh){
+  document.getElementById("livestamp").textContent="atualizando…";
+  try{
+    const r=await fetch("/api/aguardando"+(refresh?"?refresh=1":""));
+    const j=await r.json(); DADOS=j.itens||[]; CONTAGEM=j.contagem||{};
+    document.getElementById("livestamp").textContent="ao vivo · "+(j.atualizado||"");
+    renderKpis(); renderFilters(); renderTable(); renderAlertas(); renderTopProd(); renderReinc(); renderHist();
+  }catch(e){ document.getElementById("kpis").innerHTML=`<div class="loading" style="grid-column:1/-1;color:var(--danger-fg)">Erro: ${e}. O backend está rodando?</div>`; }
+}
+
+function renderKpis(){
+  const n=DADOS.length;
+  const ref=DADOS.filter(d=>d.status_money==="refunded"), exp=ref.reduce((s,d)=>s+d.valor,0);
+  const mar=DADOS.filter(d=>d.destino==="seller_address").length, cd=DADOS.filter(d=>d.destino==="warehouse").length;
+  const hot=ref.filter(d=>(d.dias_aberta||0)>=7).length, med=DADOS.filter(d=>d.claim_type==="mediations").length;
+  const valTot=DADOS.reduce((s,d)=>s+d.valor,0);
+  document.getElementById("kpis").innerHTML=`
+    <div class="kpi"><div class="ic">📦</div><div class="lbl">Voltando agora</div><div class="val">${n}</div><div class="sub">${money(valTot)} em jogo</div></div>
+    <div class="kpi v-danger"><div class="ic">💸</div><div class="lbl">Reembolsado s/ produto</div><div class="val">${money(exp)}</div><div class="sub">${ref.length} casos · ${hot} há +7 dias</div></div>
+    <div class="kpi v-info"><div class="ic">🔵</div><div class="lbl">Vêm pro seu galpão</div><div class="val">${mar}</div><div class="sub">🟢 ${cd} ficam no CD do ML</div></div>
+    <div class="kpi v-warn"><div class="ic">⚖️</div><div class="lbl">Em mediação ML</div><div class="val">${med}</div><div class="sub">disputas abertas</div></div>
+    <div class="kpi v-success"><div class="ic">🟢</div><div class="lbl">Conferências concluídas</div><div class="val">${CONTAGEM.concluida||0}</div><div class="sub">🟡 ${CONTAGEM.em_andamento||0} em andamento · ⚪ ${CONTAGEM.nao_iniciada||0} a iniciar</div></div>
+    <div class="kpi"><div class="ic">📈</div><div class="lbl">Média histórica</div><div class="val">~35<span style="font-size:13px;font-weight:600">/mês</span></div><div class="sub">${HIST.total} no total</div></div>`;
+}
+function renderFilters(){
+  const c=CONTAGEM;
+  const pend=(c.em_andamento||0)+(c.aguardando_ml||0)+(c.nao_iniciada||0);
+  const opts=[
+    ["todos","Todas",DADOS.length],
+    ["pendentes","Pendentes",pend],
+    ["em_andamento","🟡 Em andamento",c.em_andamento||0],
+    ["aguardando_ml","🔵 Aguardando ML",c.aguardando_ml||0],
+    ["concluida","🟢 Concluídas",c.concluida||0],
+    ["__sep__","",""],
+    ["seller_address","🔵 Pro galpão",""],["warehouse","🟢 CD ML",""],["refunded","💸 Reembolsados",""],["mediations","⚖️ Mediação",""]
+  ];
+  document.getElementById("filters").innerHTML=opts.map(([k,l,n])=>
+    k==="__sep__"?'<span style="width:1px;background:var(--border);margin:0 2px"></span>'
+    :`<span class="fbtn ${filtro===k?'on':''}" onclick="setFiltro('${k}')">${l}${n!==""?` <b>${n}</b>`:""}</span>`).join("");
+}
+function setFiltro(k){ filtro=k; renderFilters(); renderTable(); }
+function filtered(){ return DADOS.filter(d=>{
+  if(filtro==="todos") return true;
+  if(filtro==="pendentes") return d.conf_status!=="concluida";
+  if(["nao_iniciada","em_andamento","aguardando_ml","concluida"].includes(filtro)) return d.conf_status===filtro;
+  if(filtro==="refunded") return d.status_money==="refunded";
+  if(filtro==="mediations") return d.claim_type==="mediations";
+  return d.destino===filtro; }); }
+function sortBy(k){ if(sortK===k) sortDir*=-1; else {sortK=k; sortDir=1;} renderTable(); }
+function renderTable(){
+  const rows=filtered().slice().sort((a,b)=>{
+    let x=a[sortK], y=b[sortK];
+    if(sortK==="fase"){ x=fz(a.fase).r; y=fz(b.fase).r; }
+    x=x??-99; y=y??-99;
+    if(typeof x==="string") return sortDir*x.localeCompare(y);
+    return sortDir*(x-y);
+  });
+  document.getElementById("tbl-count").textContent="("+rows.length+")";
+  document.querySelectorAll("#tbl thead th").forEach(th=>{ th.classList.toggle("sorted",th.dataset.k===sortK);
+    const base=th.textContent.replace(/[▲▼]/g,"").trim();
+    th.innerHTML = base + (th.dataset.k===sortK?` <span class="ar">${sortDir>0?'▲':'▼'}</span>`:'');
+  });
+  document.getElementById("tbody").innerHTML=rows.map(d=>{
+    const f=fz(d.fase), rc=reinc(d);
+    const dest = d.destino==="seller_address"?'<span class="pill p-info">🔵 Maringá</span>':d.destino==="warehouse"?'<span class="pill p-success">🟢 CD ML</span>':'<span class="muted">—</span>';
+    const mon = d.status_money==="refunded"?'<span class="pill p-danger">⚠️ Reembolsado</span>':d.status_money==="retained"?'<span class="pill p-success">Retido</span>':'<span class="muted">—</span>';
+    const dias = d.dias_aberta!=null?`<span class="days ${d.dias_aberta>=7?'hot':''}">${d.dias_aberta}d</span>`:'<span class="muted">—</span>';
+    const cs=CONFST[d.conf_status]||CONFST.nao_iniciada;
+    const prog=(d.conf_prog&&d.conf_prog.feito>0)?`<div class="sub-id">${d.conf_prog.feito}/${d.conf_prog.total} etapas</div>`:'';
+    return `<tr style="cursor:pointer" onclick="openConfDetail('${d.order_id}')">
+      <td><span class="pill ${cs.c}">${cs.t}</span>${prog}</td>
+      <td><span class="pill ${f.c}">${f.t}</span></td>
+      <td class="prod">${d.produto}${d.qtd>1?` <span class="pill p-warn">${d.qtd}un</span>`:""}<div class="sub-id mono">venda ${d.order_id}</div></td>
+      <td class="num mono">${money(d.valor)}</td>
+      <td>${d.comprador}</td>
+      <td>${dest}</td>
+      <td>${mon}</td>
+      <td class="num">${dias}</td>
+      <td><span class="pill ${rc.cls}">${rc.txt}</span></td>
+    </tr>`;
+  }).join("");
+}
+function renderAlertas(){
+  const ref=DADOS.filter(d=>d.status_money==="refunded").sort((a,b)=>(b.dias_aberta||0)-(a.dias_aberta||0));
+  const el=document.getElementById("alertas");
+  if(!ref.length){ el.innerHTML='<div class="row muted">Nenhum reembolso pendente 🎉</div>'; return; }
+  el.innerHTML=ref.map(d=>`<div class="alert-row">
+    <div class="av mono">${money(d.valor)}</div>
+    <div><div style="font-weight:500">${d.produto.slice(0,34)}</div>
+      <div class="ad">${d.comprador} · aberta há <b style="color:${(d.dias_aberta||0)>=7?'var(--danger-fg)':'var(--ink-600)'}">${d.dias_aberta||0}d</b>${(d.dias_aberta||0)>=10?' · 🔴 escalar':''}</div></div>
+  </div>`).join("");
+}
+function renderTopProd(){
+  const map={};
+  DADOS.forEach(d=>{ const k=d.produto.replace(/\s+\d.*$/,"").slice(0,26); map[k]=map[k]||{n:0,v:0}; map[k].n++; map[k].v+=d.valor; });
+  const arr=Object.entries(map).sort((a,b)=>b[1].n-a[1].n).slice(0,6); const max=Math.max(...arr.map(x=>x[1].n));
+  document.getElementById("topprod").innerHTML=arr.map(([k,o])=>`<div class="miniprod">
+    <div class="t"><span>${k}</span><span class="mono">${o.n}×</span></div>
+    <div class="bar"><i style="width:${o.n/max*100}%"></i></div></div>`).join("");
+}
+function renderReinc(){
+  const arr=DADOS.filter(d=>(d.compras||1)>1||(d.devolucoes||1)>1).sort((a,b)=>(b.compras||0)-(a.compras||0));
+  const el=document.getElementById("reinc");
+  if(!arr.length){ el.innerHTML='<div class="row muted">Todos são 1ª compra devolvendo.</div>'; return; }
+  el.innerHTML=arr.map(d=>{const r=reinc(d);return `<div class="row"><span>${d.comprador}</span><span class="pill ${r.cls}">${r.txt}</span></div>`;}).join("")
+    + `<div class="row muted" style="font-size:11.5px">10 dos 13 são clientes de 1ª compra já devolvendo.</div>`;
+}
+function renderHist(){
+  const max=Math.max(...HIST.mes.map(m=>m[1]));
+  document.getElementById("barmes").innerHTML=HIST.mes.map(([m,v])=>`<div class="b"><b>${v}</b><div class="col" style="height:${v/max*92}px"></div><small>${m}</small></div>`).join("");
+  const nfTot=HIST.nf.reduce((s,x)=>s+x[1],0);
+  document.getElementById("histnf").innerHTML=HIST.nf.map(([l,v,c])=>`<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:12.5px"><span>${l}</span><b class="mono">${v} · ${Math.round(v/nfTot*100)}%</b></div><div class="bar"><i style="width:${v/nfTot*100}%;background:${c}"></i></div></div>`).join("");
+  document.getElementById("histstats").innerHTML=`
+    <div class="stat-line"><span>Valor total devolvido</span><b class="mono">${money(HIST.valor)}</b></div>
+    <div class="stat-line"><span>Afetou reputação</span><b>${HIST.reputacao} (${Math.round(HIST.reputacao/HIST.total*100)}%)</b></div>
+    <div class="stat-line"><span>Voltou ao estoque</span><b>${HIST.armazenado} · descartado ${HIST.descartado}</b></div>
+    <div class="stat-line"><span>NF de devolução via SIGE</span><b>83%</b></div>`;
+  const mmax=HIST.motivos[0][1];
+  document.getElementById("histmot").innerHTML=HIST.motivos.map(([l,v])=>`<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:12.5px"><span>${l}</span><b class="mono">${v}</b></div><div class="bar"><i style="width:${v/mmax*100}%;background:linear-gradient(90deg,var(--ceu),var(--naval))"></i></div></div>`).join("");
+}
+
+const ETLBL={chegada:"📸 Prova de chegada",abertura:"🔍 Abrir e avaliar",reclamacao_ml:"⚖️ Reclamação no ML",nf_devolucao:"🧾 NF de devolução (SIGE)",financeiro:"💰 Financeiro (SIGE)",compensacao:"🔄 Compensação (SIGE)",estoque:"📦 Estoque"};
+const DESFLBL={certo:"✅ Certo / perfeito",avariado:"⚠️ Avariado",trocado:"🔄 Trocado / golpe",faltando:"📉 Faltando peças",vazio:"📦 Caixa vazia"};
+function etDetail(key,e){
+  if(key==="abertura"&&e.desfecho) return "Estado: "+(DESFLBL[e.desfecho]||e.desfecho);
+  if(key==="chegada"&&e.recebidos) return e.recebidos+" volume(s) recebido(s)";
+  if(key==="reclamacao_ml") return e.resultado&&e.resultado!=="aguardando"?("Resultado: "+(e.resultado==="ganhamos"?"✔ ganhamos":"✘ perdemos")):(e.enviado?"🔵 Aguardando resposta do ML":"");
+  if(key==="estoque") return (e.destino?({volta:"📥 Voltou ao estoque",descarte:"🗑 Descartado",retido:"🔒 Retido"}[e.destino]||e.destino):"")+(e.local?(" · local: "+e.local):"");
+  if(key==="compensacao") return e.compensou?"Compensado com a venda":"Sem compensação (não se aplica)";
+  return "";
+}
+async function openConfDetail(oid){
+  const m=document.getElementById("confmodal"), body=document.getElementById("confmodal-body");
+  body.innerHTML='<div class="loading">Carregando…</div>'; m.style.display="flex";
+  let reg, anexos=[];
+  try{ reg=await (await fetch("/api/conferencia/"+encodeURIComponent(oid))).json();
+       anexos=await (await fetch("/api/conferencia/"+encodeURIComponent(oid)+"/anexos")).json();
+  }catch(e){ body.innerHTML='<div class="loading">Erro ao carregar.</div>'; return; }
+  const d=DADOS.find(x=>String(x.order_id)===String(oid))||{}, et=reg.etapas||{};
+  const ruim=["avariado","trocado","faltando","vazio"].includes((et.abertura||{}).desfecho);
+  const order=["chegada","abertura"]; if(ruim)order.push("reclamacao_ml"); order.push("nf_devolucao","financeiro","compensacao","estoque");
+  const cs=CONFST[reg.status]||CONFST.nao_iniciada;
+  const steps=order.map(k=>{ const e=et[k]||{}; const done=k==="reclamacao_ml"?(e.resultado&&e.resultado!=="aguardando"):!!e.feito;
+    const det=etDetail(k,e); const who=e.nome?`✓ ${e.nome} · ${e.perfil||""} · ${e.em||""}`:(k==="reclamacao_ml"&&e.enviado?`enviado por ${e.nome||""} · ${e.em||""}`:"a fazer");
+    return `<div class="cm-step ${done?'done':''}"><div class="cm-ic">${done?'✓':'○'}</div><div><div class="cm-t">${ETLBL[k]}</div>${det?`<div class="cm-d">${det}</div>`:""}<div class="cm-who">${who}</div></div></div>`;
+  }).join("");
+  const TIPOLBL={chegada:"📸 Provas de chegada (volume)",avaria:"🔧 Provas de avaria"};
+  const grupos={}; anexos.forEach(a=>{ (grupos[a.tipo]=grupos[a.tipo]||[]).push(a); });
+  const anexosHtml = anexos.length
+    ? Object.entries(grupos).map(([tipo,arr])=>`<div class="cm-anexos"><div class="cm-atit">${TIPOLBL[tipo]||tipo} · ${arr.length} foto(s)</div><div class="cm-grid">${arr.map(a=>`<img src="${a.data}" class="cm-thumb" onclick="verFoto(this.src)">`).join("")}</div></div>`).join("")
+    : `<div style="padding:10px 20px;font-size:12px;color:var(--ink-400)">📷 Nenhuma foto anexada ainda nesta conferência.</div>`;
+  body.innerHTML=`<div class="cm-head"><div><h3>${d.produto||reg.produto||oid}</h3><div class="muted" style="font-size:12px;margin-top:4px">venda ${oid} · <span class="pill ${cs.c}">${cs.t}</span> ${reg.progresso?("· "+reg.progresso.feito+"/"+reg.progresso.total+" etapas"):""}</div></div><div class="x" onclick="closeConfDetail()">✕</div></div>${steps}<div class="cm-secao">Anexos</div>${anexosHtml}<div style="padding:12px 20px;font-size:11.5px;color:var(--ink-400)">${reg.iniciada_por?("Iniciada por "+reg.iniciada_por+" · "):""}${reg.atualizado_em?("atualizada "+reg.atualizado_em):""}</div>`;
+}
+function verFoto(src){
+  let o=document.getElementById("lightbox");
+  if(!o){ o=document.createElement("div"); o.id="lightbox"; o.className="lightbox"; o.onclick=()=>{o.style.display="none";}; document.body.appendChild(o); }
+  o.innerHTML=`<img src="${src}">`; o.style.display="flex";
+}
+function closeConfDetail(){ document.getElementById("confmodal").style.display="none"; }
+
+function showTab(t){
+  ["dev","ana","hist"].forEach(x=>{
+    document.getElementById("tab-"+x).style.display = (x===t)?"block":"none";
+    document.getElementById("gt-"+x).classList.toggle("on", x===t);
+  });
+}
+document.querySelectorAll("#tbl thead th").forEach(th=>th.onclick=()=>sortBy(th.dataset.k));
+load(false);
+// auto-refresh: mantém o painel em sincronia com o que é feito no mobile (a cada 20s)
+setInterval(()=>{ if(document.getElementById("confmodal").style.display==="none") load(false); }, 20000);
+</script>
+</body>
+</html>
