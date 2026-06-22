@@ -290,11 +290,11 @@ def _candidatos():
     seller = _tok["seller"]
     if not seller:
         return cand
-    # devoluções: indexa claims opened+closed; para cada um, checa returns v2 e só mantém
-    # quem está VOLTANDO AGORA (not delivered + shipment em status de trânsito).
-    # Mesma regra do fetch_claims_returns.py do PC.
-    EM_TRANSITO = {"shipped", "ready_to_ship", "pending", "handling", "in_hub", "in_route"}
-    claims_por_order = {}   # rid -> cid
+    # REGRA DEFINITIVA (igual painel ML "A caminho"): só entra o que o comprador JÁ ENVIOU
+    # e o vendedor AINDA NÃO RECEBEU. A autoridade é o return.status do ML (provado: o ML
+    # marca return.status='shipped' = "a caminho"; 'delivered' = já recebido → FORA).
+    A_CAMINHO = {"shipped"}   # comprador postou a devolução, está em trânsito pra Napel
+    claims_por_order = {}     # rid -> cid
     for status, max_pages in (("opened", 40), ("closed", 20)):
         offset = 0
         for _ in range(max_pages):
@@ -309,35 +309,16 @@ def _candidatos():
             offset += 50
             if not data or offset >= total:
                 break
-    # Filtra: passa quem está voltando AGORA, ou quem JÁ CHEGOU mas ainda precisa ser conferido
-    # (delivered recente — o pacote físico chega no galpão depois do ML marcar delivered).
-    from datetime import datetime, timedelta
-    JANELA_DELIVERED = 21  # dias — captura pacotes recém-chegados que ainda não foram revisados
     for oid, cid in claims_por_order.items():
         rt = g(f"/post-purchase/v2/claims/{cid}/returns") or {}
-        ships = rt.get("shipments") or []
-        ao_seller = [s for s in ships if (s.get("destination") or {}).get("name") == "seller_address"]
-        pool = ao_seller or ships
-        if not pool:
+        if not (rt.get("shipments")):
             continue
-        # em trânsito de volta?
-        returning = any(s.get("status") in EM_TRANSITO for s in pool)
-        # delivered recente (chegou nos últimos N dias)?
-        recem_chegado = False
-        if not returning:
-            for s in pool:
-                if s.get("status") == "delivered":
-                    dl = (rt.get("last_updated") or rt.get("date_closed") or rt.get("date_created") or "")[:10]
-                    try:
-                        if (_today() - date.fromisoformat(dl)).days <= JANELA_DELIVERED:
-                            recem_chegado = True; break
-                    except Exception:
-                        pass
-        if returning or recem_chegado:
+        if rt.get("status") in A_CAMINHO:   # só 'shipped' (a caminho, não recebido)
             cand[str(oid)] = "devolucao"
-    # não-entregas: pedidos cujo ENVIO falhou e está VOLTANDO ao remetente.
-    # Filtro direto shipping.status=not_delivered — pega venda ANTIGA voltando agora
-    # (que o filtro por data de criação perdia). Confirma o substatus de retorno no shipment.
+    # não-entregas: ENVIO que falhou e está VOLTANDO ao remetente (ainda não chegou).
+    # shipping.status=not_delivered pega venda antiga voltando agora; mantém só os EM TRÂNSITO
+    # de volta (returning_*), NÃO os que já voltaram (returned/returned_to_hub) nem lost/etc.
+    NE_A_CAMINHO = {"returning_to_sender", "returning_to_hub"}
     offset = 0
     for _ in range(8):
         r = g(f"/orders/search?seller={seller}&shipping.status=not_delivered&limit=50&offset={offset}&sort=date_desc")
@@ -348,7 +329,7 @@ def _candidatos():
             shp = (e.get("shipping") or {}).get("id")
             if shp:
                 sh = g(f"/shipments/{shp}") or {}
-                if sh.get("substatus") in VOLTA_SUB:
+                if sh.get("substatus") in NE_A_CAMINHO:
                     cand.setdefault(oid, "nao_entrega")
         offset += 50
         if offset >= total or not results:
@@ -384,6 +365,9 @@ def _do_build():
                     itens.append(it)
             except Exception:
                 continue
+        # trava: só "a caminho" (comprador enviou, não recebemos). Nada de delivered/em preparação.
+        ACEITA_FASE = {"shipped", "returning_to_sender", "returning_to_hub"}
+        itens = [it for it in itens if it.get("fase") in ACEITA_FASE]
         rank = {"delivered": -1, "shipped": 0, "label_generated": 1, "returning_to_sender": 2, "returning_to_hub": 2}
         itens.sort(key=lambda x: (rank.get(x["fase"], 3), -x["valor"]))
         out = {"ts": time.time(), "atualizado": datetime.now().strftime("%d/%m/%Y %H:%M"),
