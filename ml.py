@@ -309,15 +309,31 @@ def _candidatos():
             offset += 50
             if not data or offset >= total:
                 break
-    # Filtra: só passa quem AINDA está com produto voltando.
+    # Filtra: passa quem está voltando AGORA, ou quem JÁ CHEGOU mas ainda precisa ser conferido
+    # (delivered recente — o pacote físico chega no galpão depois do ML marcar delivered).
+    from datetime import datetime, timedelta
+    JANELA_DELIVERED = 21  # dias — captura pacotes recém-chegados que ainda não foram revisados
     for oid, cid in claims_por_order.items():
         rt = g(f"/post-purchase/v2/claims/{cid}/returns") or {}
         ships = rt.get("shipments") or []
         seller = [s for s in ships if (s.get("destination") or {}).get("name") == "seller_address"]
         pool = seller or ships
-        returned = any(s.get("status") == "delivered" for s in pool)
-        returning = (not returned) and any(s.get("status") in EM_TRANSITO for s in pool)
-        if returning:
+        if not pool:
+            continue
+        # em trânsito de volta?
+        returning = any(s.get("status") in EM_TRANSITO for s in pool)
+        # delivered recente (chegou nos últimos N dias)?
+        recem_chegado = False
+        if not returning:
+            for s in pool:
+                if s.get("status") == "delivered":
+                    dl = (rt.get("last_updated") or rt.get("date_closed") or rt.get("date_created") or "")[:10]
+                    try:
+                        if (_today() - date.fromisoformat(dl)).days <= JANELA_DELIVERED:
+                            recem_chegado = True; break
+                    except Exception:
+                        pass
+        if returning or recem_chegado:
             cand[str(oid)] = "devolucao"
     # não-entregas (shipments voltando, últimos 60 dias do seller)
     from datetime import timedelta

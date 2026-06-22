@@ -291,6 +291,7 @@
   .badge-reinc.warn{background:#fff4e0;color:var(--warn)}
   .badge-reinc.red{background:var(--danger-soft);color:var(--danger)}
 </style>
+<script src="https://unpkg.com/html5-qrcode@2.3.10/html5-qrcode.min.js"></script>
 </head>
 <body>
 <div class="page">
@@ -360,9 +361,12 @@
             <div id="scan-step1">
               <h3>Bipar devolução</h3>
               <p>Aponte para o código de barras / QR da etiqueta</p>
-              <div class="scanview"><div class="frame"><div class="laser"></div></div><small>câmera (mockup)</small></div>
+              <div class="scanview" id="qrwrap">
+                <div id="qr-reader" style="width:100%;height:100%"></div>
+                <div id="qr-fallback" style="display:none;text-align:center;color:rgba(255,255,255,.7);font-size:11px;padding:20px">câmera não autorizada — digite o código abaixo</div>
+              </div>
               <div class="scaninput">
-                <input id="scan-input" placeholder="ou digite qualquer ID da etiqueta" />
+                <input id="scan-input" placeholder="ou digite qualquer ID da etiqueta" autocomplete="off" inputmode="text" />
                 <button onclick="doSearch()">Buscar</button>
               </div>
               <div class="hint">Verifica em <b>todos</b> os IDs: nº venda · pack · claim · envio (47…) · rastreio (AP…BR e outros)</div>
@@ -650,12 +654,44 @@ function confirmar(){
 }
 
 /* ===== SCAN ===== */
-function openScan(){ resetScan(); document.getElementById("sheet").classList.add("open"); }
-function closeScan(silent){ document.getElementById("sheet").classList.remove("open"); if(!silent){} }
+let _qr = null, _qrBusy = false;
+async function startQrReader(){
+  try{
+    if(!window.Html5Qrcode){ document.getElementById("qr-fallback").style.display="block"; return; }
+    if(_qr){ try{ await _qr.stop(); }catch(e){} _qr.clear(); _qr=null; }
+    _qr = new Html5Qrcode("qr-reader", {verbose:false});
+    await _qr.start({ facingMode: { exact: "environment" } },
+      { fps: 10, qrbox: function(w,h){ const s=Math.floor(Math.min(w,h)*0.8); return {width:s, height:Math.max(60, Math.floor(s*0.4))}; }, aspectRatio: 16/9 },
+      (decoded) => {
+        if(_qrBusy) return; _qrBusy=true;
+        document.getElementById("scan-input").value = decoded;
+        try{ navigator.vibrate && navigator.vibrate(40); }catch(e){}
+        stopQrReader(); doSearch();
+        setTimeout(()=>{_qrBusy=false;}, 1500);
+      },
+      ()=>{}  // ignore errors per frame
+    );
+  }catch(e){
+    // fallback: tenta sem 'exact'
+    try{
+      _qr = new Html5Qrcode("qr-reader");
+      await _qr.start({ facingMode: "environment" }, {fps:10,qrbox:{width:240,height:140}},
+        (decoded)=>{ if(_qrBusy)return; _qrBusy=true; document.getElementById("scan-input").value=decoded; stopQrReader(); doSearch(); setTimeout(()=>{_qrBusy=false;},1500); }, ()=>{});
+    }catch(e2){
+      document.getElementById("qr-fallback").style.display="block";
+    }
+  }
+}
+async function stopQrReader(){
+  if(_qr){ try{ await _qr.stop(); }catch(e){} try{ _qr.clear(); }catch(e){} _qr=null; }
+}
+function openScan(){ resetScan(); document.getElementById("sheet").classList.add("open"); setTimeout(startQrReader, 250); }
+function closeScan(silent){ stopQrReader(); document.getElementById("sheet").classList.remove("open"); }
 function resetScan(){
   document.getElementById("scan-step1").style.display="block";
   document.getElementById("scan-notfound").style.display="none";
   document.getElementById("scan-input").value="";
+  document.getElementById("qr-fallback").style.display="none";
 }
 const FIELDS = ["order_id","pack_id","claim_id","shipment_id","tracking","item_id"];
 function findByCode(code){
@@ -669,11 +705,25 @@ function findByCode(code){
   }
   return null;
 }
-function doSearch(){
-  const code = document.getElementById("scan-input").value;
+async function doSearch(){
+  const code = (document.getElementById("scan-input").value||"").trim();
+  if(!code) return;
   const hit = findByCode(code);
-  if(hit){ openFicha(hit.i, hit.by); }
-  else { document.getElementById("nf-code").textContent=code||"(vazio)"; document.getElementById("scan-step1").style.display="none"; document.getElementById("scan-notfound").style.display="block"; }
+  if(hit){ openFicha(hit.i, hit.by); return; }
+  // Não está na lista → busca direto no ML (sem precisar clicar de novo)
+  document.getElementById("scan-step1").style.display="none";
+  document.getElementById("scan-notfound").style.display="block";
+  document.getElementById("nf-code").textContent=code;
+  const h=document.getElementById("scan-notfound").querySelector("h4");
+  const old=h.textContent; h.textContent="Buscando no Mercado Livre…";
+  try{
+    const r=await fetch(`/api/buscar?code=${encodeURIComponent(code)}&ml_fallback=1`);
+    const j=await r.json();
+    if(j.found && j.item){ openItem(j.item, j.by==="ml"?"order_id":j.by); return; }
+    h.textContent="Não encontrado";
+    alert("🔎 "+(j.hint||"Código não encontrado na lista nem no ML."));
+  }catch(e){ alert("Erro: "+e); }
+  h.textContent=old;
 }
 function openItem(item, by){
   let idx = DADOS.findIndex(d=>d.order_id===item.order_id);
