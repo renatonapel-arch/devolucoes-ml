@@ -316,8 +316,8 @@ def _candidatos():
     for oid, cid in claims_por_order.items():
         rt = g(f"/post-purchase/v2/claims/{cid}/returns") or {}
         ships = rt.get("shipments") or []
-        seller = [s for s in ships if (s.get("destination") or {}).get("name") == "seller_address"]
-        pool = seller or ships
+        ao_seller = [s for s in ships if (s.get("destination") or {}).get("name") == "seller_address"]
+        pool = ao_seller or ships
         if not pool:
             continue
         # em trânsito de volta?
@@ -335,13 +335,14 @@ def _candidatos():
                         pass
         if returning or recem_chegado:
             cand[str(oid)] = "devolucao"
-    # não-entregas (shipments voltando, últimos 60 dias do seller)
-    from datetime import timedelta
-    desde = (_today() - timedelta(days=60)).isoformat()
+    # não-entregas: pedidos cujo ENVIO falhou e está VOLTANDO ao remetente.
+    # Filtro direto shipping.status=not_delivered — pega venda ANTIGA voltando agora
+    # (que o filtro por data de criação perdia). Confirma o substatus de retorno no shipment.
     offset = 0
-    for _ in range(10):
-        r = g(f"/orders/search?seller={seller}&order.date_created.from={desde}T00:00:00.000-03:00&limit=50&offset={offset}&sort=date_desc")
+    for _ in range(8):
+        r = g(f"/orders/search?seller={seller}&shipping.status=not_delivered&limit=50&offset={offset}&sort=date_desc")
         results = (r or {}).get("results", [])
+        total = ((r or {}).get("paging") or {}).get("total", 0)
         for e in results:
             oid = str(e.get("id"))
             shp = (e.get("shipping") or {}).get("id")
@@ -349,6 +350,9 @@ def _candidatos():
                 sh = g(f"/shipments/{shp}") or {}
                 if sh.get("substatus") in VOLTA_SUB:
                     cand.setdefault(oid, "nao_entrega")
+        offset += 50
+        if offset >= total or not results:
+            break
         if len(results) < 50: break
         offset += 50
     return cand
