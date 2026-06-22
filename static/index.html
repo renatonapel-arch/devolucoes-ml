@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Devoluções ML · Recebimento no Galpão · Napel</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<!-- v3: scanner real + busca por nome + delivered recente -->
+
 <style>
   :root{
     --bg:#eef1f6; --card:#ffffff; --ink:#16202e; --muted:#6b7689; --muted2:#929cad;
@@ -36,7 +41,7 @@
   .perfil{padding:15px 8px;border:1.5px solid rgba(255,255,255,.35);border-radius:12px;text-align:center;font-weight:700;font-size:13px;cursor:pointer;background:rgba(255,255,255,.1)}
   .perfil.on{background:#fff;color:var(--brand-d);border-color:#fff}
   .entrar{width:100%;padding:15px;border:0;border-radius:12px;background:#fff;color:var(--brand-d);font-weight:800;font-size:15px;cursor:pointer}
-  .userchip{font-size:11px;background:rgba(255,255,255,.18);padding:5px 10px;border-radius:999px;cursor:pointer;white-space:nowrap;color:#fff}
+  .userchip,#userchip{font-size:11.5px;opacity:.9;color:#fff;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
   /* status tabs */
   .tabs{display:flex;gap:6px;padding:8px 12px 2px;overflow-x:auto}
   .tabs::-webkit-scrollbar{height:0}
@@ -323,11 +328,10 @@
           <div class="app-head">
             <div class="row1">
               <div class="applogo">📦</div>
-              <div style="flex:1">
-                <h1>Devoluções ML · Recebimento</h1>
-                <p>Galpão Maringá · aguardando o produto voltar</p>
+              <div style="flex:1;min-width:0">
+                <h1>Devoluções ML</h1>
+                <p id="userchip" onclick="trocarUsuario()" style="cursor:pointer"></p>
               </div>
-              <div id="userchip" class="userchip" onclick="trocarUsuario()" style="margin-right:8px"></div>
               <div onclick="carregar(true)" title="Atualizar ao vivo" style="cursor:pointer;font-size:18px;padding:6px;border-radius:9px;background:rgba(255,255,255,.16)">🔄</div>
             </div>
           </div>
@@ -678,7 +682,13 @@ async function startQrReader(){
       await _qr.start({ facingMode: "environment" }, {fps:10,qrbox:{width:240,height:140}},
         (decoded)=>{ if(_qrBusy)return; _qrBusy=true; document.getElementById("scan-input").value=decoded; stopQrReader(); doSearch(); setTimeout(()=>{_qrBusy=false;},1500); }, ()=>{});
     }catch(e2){
-      document.getElementById("qr-fallback").style.display="block";
+      const fb=document.getElementById("qr-fallback");
+      fb.style.display="block";
+      fb.innerHTML = "📷 Câmera não disponível.<br><small style='display:block;margin-top:6px;line-height:1.5'>"+
+        "Se for a 1ª vez: aceite a permissão da câmera.<br>"+
+        "Se já negou: Ajustes → Safari → Câmera → 'Permitir' p/ este site.<br>"+
+        "(você pode digitar o código abaixo)</small>";
+      console.error("qr err:", e, e2);
     }
   }
 }
@@ -694,13 +704,32 @@ function resetScan(){
   document.getElementById("qr-fallback").style.display="none";
 }
 const FIELDS = ["order_id","pack_id","claim_id","shipment_id","tracking","item_id"];
+const TXT_FIELDS = ["produto","comprador"];
 function findByCode(code){
-  code = (code||"").trim().toUpperCase();
+  code = (code||"").trim();
   if(!code) return null;
+  const up = code.toUpperCase();
+  // 1) match EXATO em qualquer ID
   for(let i=0;i<DADOS.length;i++){
     for(const f of FIELDS){
       const val = (DADOS[i][f]||"").toString().toUpperCase();
-      if(val && val===code) return {i,by:f};
+      if(val && val===up) return {i,by:f};
+    }
+  }
+  // 2) se o código tem ≥4 chars e parece texto (não só números), aceita match PARCIAL em produto/comprador
+  if(code.length>=3){
+    for(let i=0;i<DADOS.length;i++){
+      for(const f of TXT_FIELDS){
+        const val = (DADOS[i][f]||"").toString().toUpperCase();
+        if(val && val.includes(up)) return {i,by:f};
+      }
+    }
+    // 3) match PARCIAL nos IDs (caso o usuário digite só o final/início)
+    for(let i=0;i<DADOS.length;i++){
+      for(const f of FIELDS){
+        const val = (DADOS[i][f]||"").toString().toUpperCase();
+        if(val && val.includes(up)) return {i,by:f};
+      }
     }
   }
   return null;
@@ -710,10 +739,16 @@ async function doSearch(){
   if(!code) return;
   const hit = findByCode(code);
   if(hit){ openFicha(hit.i, hit.by); return; }
-  // Não está na lista → busca direto no ML (sem precisar clicar de novo)
+  // Só faz fallback no ML se PARECER um ID (numérico ou alfanumérico tipo AP123BR/MEL...)
+  const ehId = /^[A-Z0-9-]{6,}$/i.test(code);
   document.getElementById("scan-step1").style.display="none";
   document.getElementById("scan-notfound").style.display="block";
   document.getElementById("nf-code").textContent=code;
+  if(!ehId){
+    document.getElementById("scan-notfound").querySelector("h4").textContent="Não achei na lista";
+    alert("🔎 \""+code+"\" não bateu com nenhuma devolução da lista.\n\nDica: a busca encontra também por nome do produto ou comprador. Tente outro termo.");
+    return;
+  }
   const h=document.getElementById("scan-notfound").querySelector("h4");
   const old=h.textContent; h.textContent="Buscando no Mercado Livre…";
   try{

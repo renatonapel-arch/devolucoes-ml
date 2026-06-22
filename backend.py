@@ -72,24 +72,24 @@ async def avaria(req: Request):
     return JSONResponse(ml.enviar_avaria(payload))
 
 
+NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
+
+
 @app.get("/")
 def index(request: Request):
-    # roteamento por host (2 URLs distintas, mesmo backend):
-    # gestor.devolucoes.demos.napel.com.br -> serve a tela do gestor
-    # conferente.devolucoes.demos.napel.com.br -> serve a tela do conferente
     host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").lower()
     arquivo = "gestor.html" if host.startswith("gestor.") else "index.html"
-    return FileResponse(os.path.join(APP_DIR, "static", arquivo))
+    return FileResponse(os.path.join(APP_DIR, "static", arquivo), headers=NO_CACHE)
 
 
 @app.get("/gestor")
 def gestor():
-    return FileResponse(os.path.join(APP_DIR, "static", "gestor.html"))
+    return FileResponse(os.path.join(APP_DIR, "static", "gestor.html"), headers=NO_CACHE)
 
 
 @app.get("/conferente")
 def conferente():
-    return FileResponse(os.path.join(APP_DIR, "static", "index.html"))
+    return FileResponse(os.path.join(APP_DIR, "static", "index.html"), headers=NO_CACHE)
 
 
 app.mount("/static", StaticFiles(directory=os.path.join(APP_DIR, "static")), name="static")
