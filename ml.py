@@ -290,8 +290,11 @@ def _candidatos():
     seller = _tok["seller"]
     if not seller:
         return cand
-    # devoluções: varre claims opened (em curso) + closed recentes. build_item filtra os que ainda têm produto voltando.
-    # Limita a varredura: status=opened pega tudo (alguns); closed só os mais novos via paginação curta.
+    # devoluções: indexa claims opened+closed; para cada um, checa returns v2 e só mantém
+    # quem está VOLTANDO AGORA (not delivered + shipment em status de trânsito).
+    # Mesma regra do fetch_claims_returns.py do PC.
+    EM_TRANSITO = {"shipped", "ready_to_ship", "pending", "handling", "in_hub", "in_route"}
+    claims_por_order = {}   # rid -> cid
     for status, max_pages in (("opened", 40), ("closed", 6)):
         offset = 0
         for _ in range(max_pages):
@@ -300,11 +303,22 @@ def _candidatos():
             total = ((r or {}).get("paging") or {}).get("total", 0)
             for c in data:
                 oid = str(c.get("resource_id") or "")
-                if oid.startswith("2000"):
-                    cand.setdefault(oid, "devolucao")
+                cid = c.get("id")
+                if oid.startswith("2000") and cid:
+                    claims_por_order.setdefault(oid, cid)
             offset += 50
             if not data or offset >= total:
                 break
+    # Filtra: só passa quem AINDA está com produto voltando.
+    for oid, cid in claims_por_order.items():
+        rt = g(f"/post-purchase/v2/claims/{cid}/returns") or {}
+        ships = rt.get("shipments") or []
+        seller = [s for s in ships if (s.get("destination") or {}).get("name") == "seller_address"]
+        pool = seller or ships
+        returned = any(s.get("status") == "delivered" for s in pool)
+        returning = (not returned) and any(s.get("status") in EM_TRANSITO for s in pool)
+        if returning:
+            cand[str(oid)] = "devolucao"
     # não-entregas (shipments voltando, últimos 60 dias do seller)
     from datetime import timedelta
     desde = (_today() - timedelta(days=60)).isoformat()
