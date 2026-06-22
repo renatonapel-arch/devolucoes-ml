@@ -295,7 +295,7 @@ def _candidatos():
     # Mesma regra do fetch_claims_returns.py do PC.
     EM_TRANSITO = {"shipped", "ready_to_ship", "pending", "handling", "in_hub", "in_route"}
     claims_por_order = {}   # rid -> cid
-    for status, max_pages in (("opened", 40), ("closed", 6)):
+    for status, max_pages in (("opened", 40), ("closed", 20)):
         offset = 0
         for _ in range(max_pages):
             r = g(f"/post-purchase/v1/claims/search?status={status}&limit=50&offset={offset}")
