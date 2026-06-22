@@ -354,37 +354,79 @@ def _candidatos():
     return cand
 
 
-def build_aguardando(force=False, max_idade_min=30):
-    """Lista ao vivo. Usa cache em arquivo; recomputa se velho ou force."""
-    if os.environ.get("DEVOL_EMPTY") == "1":   # sem devoluções reais (só itens de teste, se ligados)
-        return _with_test({"ts": time.time(), "atualizado": datetime.now().strftime("%d/%m/%Y %H:%M"),
-                           "total": 0, "itens": []})
-    if not force and os.path.exists(CACHE_FILE):
+_build_lock = threading.Lock()
+_building = False
+
+
+def _ler_cache():
+    if os.path.exists(CACHE_FILE):
         try:
-            c = json.load(open(CACHE_FILE, encoding="utf-8"))
-            idade = (time.time() - c.get("ts", 0)) / 60
-            if idade < max_idade_min:
-                return _with_test(c)
+            return json.load(open(CACHE_FILE, encoding="utf-8"))
+        except Exception:
+            return None
+    return None
+
+
+def _do_build():
+    """Recomputa a lista DE FATO (lento, ~3min). Grava no cache. NÃO chamar direto no request."""
+    global _building
+    try:
+        cand = _candidatos()
+        itens = []
+        for oid, origem in sorted(cand.items()):
+            try:
+                it = build_item(oid, origem)
+                if it:
+                    itens.append(it)
+            except Exception:
+                continue
+        rank = {"delivered": -1, "shipped": 0, "label_generated": 1, "returning_to_sender": 2, "returning_to_hub": 2}
+        itens.sort(key=lambda x: (rank.get(x["fase"], 3), -x["valor"]))
+        out = {"ts": time.time(), "atualizado": datetime.now().strftime("%d/%m/%Y %H:%M"),
+               "total": len(itens), "itens": itens, "construindo": False}
+        try:
+            json.dump(out, open(CACHE_FILE, "w", encoding="utf-8"), ensure_ascii=False)
         except Exception:
             pass
-    cand = _candidatos()
-    itens = []
-    for oid, origem in sorted(cand.items()):
-        try:
-            it = build_item(oid, origem)
-            if it:
-                itens.append(it)
-        except Exception:
-            continue
-    rank = {"delivered": -1, "shipped": 0, "label_generated": 1, "returning_to_sender": 2, "returning_to_hub": 2}
-    itens.sort(key=lambda x: (rank.get(x["fase"], 3), -x["valor"]))
-    out = {"ts": time.time(), "atualizado": datetime.now().strftime("%d/%m/%Y %H:%M"),
-           "total": len(itens), "itens": itens}
-    try:
-        json.dump(out, open(CACHE_FILE, "w", encoding="utf-8"), ensure_ascii=False)
-    except Exception:
-        pass
-    return _with_test(out)
+        return out
+    finally:
+        with _build_lock:
+            _building = False
+
+
+def _start_bg_build():
+    """Dispara o rebuild em thread, se já não houver um rodando."""
+    global _building
+    with _build_lock:
+        if _building:
+            return
+        _building = True
+    threading.Thread(target=_do_build, daemon=True).start()
+
+
+def build_aguardando(force=False, max_idade_min=30):
+    """NUNCA bloqueia o request. Serve cache (mesmo velho) na hora e revalida em background.
+    - cache fresco               -> devolve na hora
+    - cache velho/inexistente    -> dispara rebuild em background e devolve o que tem
+                                    (stale com construindo=True, ou vazio+construindo se 1ª vez)
+    - force=True                 -> idem, mas força o rebuild mesmo com cache fresco
+    """
+    if os.environ.get("DEVOL_EMPTY") == "1":
+        return _with_test({"ts": time.time(), "atualizado": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                           "total": 0, "itens": [], "construindo": False})
+    cached = _ler_cache()
+    idade = (time.time() - cached.get("ts", 0)) / 60 if cached else 1e9
+    fresca = cached is not None and idade < max_idade_min
+    if fresca and not force:
+        return _with_test(cached)
+    # precisa revalidar -> dispara em background (não trava o HTTP)
+    _start_bg_build()
+    if cached:                      # tem algo (mesmo velho): serve na hora
+        c = dict(cached); c["construindo"] = True
+        return _with_test(c)
+    # 1ª carga, nada em cache ainda: devolve vazio sinalizando que está construindo
+    return _with_test({"ts": 0, "atualizado": "atualizando ao vivo…",
+                       "total": 0, "itens": [], "construindo": True})
 
 
 def buscar(code, force_ml=False):
@@ -743,5 +785,6 @@ def lista():
     from collections import Counter
     cont = Counter(i.get("conf_status", "nao_iniciada") for i in itens)
     return {"atualizado": base.get("atualizado"), "total": len(itens), "itens": itens,
+            "construindo": bool(base.get("construindo")),
             "contagem": {k: cont.get(k, 0) for k in ["nao_iniciada", "em_andamento", "aguardando_ml", "concluida"]},
             "modo": mode()["mode"]}

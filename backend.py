@@ -14,6 +14,16 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 app = FastAPI(title="Devoluções ML — Recebimento (Fase 1, leitura)")
 
 
+@app.on_event("startup")
+def _aquecer_cache():
+    # Após um redeploy o container é novo (cache frio). Sem aquecer, o 1º conferente
+    # a abrir esperaria ~3min de tela vazia. Dispara o build em background no boot.
+    try:
+        ml._start_bg_build()
+    except Exception:
+        pass
+
+
 @app.get("/api/health")
 def health():
     return ml.token_status()
@@ -21,6 +31,7 @@ def health():
 
 @app.get("/api/aguardando")
 def aguardando(refresh: int = 0):
+    # nunca bloqueia: refresh apenas dispara rebuild em background (stale-while-revalidate)
     if refresh:
         ml.build_aguardando(force=True)
     return ml.lista()

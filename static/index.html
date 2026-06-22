@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v3: scanner real + busca por nome + delivered recente -->
+<!-- v4: cache nao-bloqueante (stale-while-revalidate) + aquece no boot -->
 
 <style>
   :root{
@@ -1008,9 +1008,12 @@ function sugerirMensagem(d){
 }
 
 /* ===== CARGA AO VIVO (Fase 1, leitura) ===== */
+let _pollTimer = null;
 async function carregar(refresh){
   const lista = document.getElementById("list");
-  lista.innerHTML = `<div style="padding:30px 16px;text-align:center;color:var(--muted)">⏳ Carregando devoluções ao vivo do Mercado Livre…<br><small>(primeira carga pode levar alguns segundos)</small></div>`;
+  if(!DADOS.length){
+    lista.innerHTML = `<div style="padding:30px 16px;text-align:center;color:var(--muted)">⏳ Carregando devoluções ao vivo do Mercado Livre…<br><small>(primeira carga após atualização pode levar ~1 min — fica nesta tela e atualiza sozinha)</small></div>`;
+  }
   document.getElementById("list-count").textContent = "Aguardando recebimento…";
   try{
     const r = await fetch("/api/aguardando"+(refresh?"?refresh=1":""));
@@ -1019,9 +1022,21 @@ async function carregar(refresh){
     CONTAGEM = j.contagem||{};
     renderChips(); renderList(); buildExamples();
     const c = document.getElementById("list-count");
-    if(j.atualizado) c.textContent = `Aguardando recebimento (${DADOS.length}) · ao vivo ${j.atualizado}`;
+    if(j.construindo){
+      // ainda construindo no servidor: mostra aviso e re-busca sozinho em 8s
+      c.textContent = DADOS.length ? `Aguardando recebimento (${DADOS.length}) · 🔄 atualizando ao vivo…`
+                                   : "🔄 Buscando devoluções no Mercado Livre… (atualiza sozinho)";
+      if(_pollTimer) clearTimeout(_pollTimer);
+      _pollTimer = setTimeout(()=>carregar(false), 8000);
+    } else {
+      if(_pollTimer){ clearTimeout(_pollTimer); _pollTimer=null; }
+      if(j.atualizado) c.textContent = `Aguardando recebimento (${DADOS.length}) · ao vivo ${j.atualizado}`;
+    }
   }catch(e){
-    lista.innerHTML = `<div style="padding:30px 16px;text-align:center;color:var(--danger)">Erro ao carregar: ${e}<br><small>O backend está rodando? (uvicorn na porta 8078)</small></div>`;
+    if(!DADOS.length)
+      lista.innerHTML = `<div style="padding:30px 16px;text-align:center;color:var(--danger)">Erro ao carregar: ${e}<br><small>Toque em 🔄 pra tentar de novo.</small></div>`;
+    if(_pollTimer) clearTimeout(_pollTimer);
+    _pollTimer = setTimeout(()=>carregar(false), 10000);
   }
 }
 async function initMode(){
