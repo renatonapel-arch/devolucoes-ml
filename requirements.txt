@@ -1,3 +1,5 @@
 fastapi>=0.115
 uvicorn>=0.30
 requests>=2.31
+zxing-cpp>=2.2
+pillow>=10.0

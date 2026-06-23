@@ -92,6 +92,38 @@ async def post_anexo(oid: str, req: Request):
         return JSONResponse({"ok": False, "erro": str(e)}, status_code=500)
 
 
+@app.post("/api/decode-barcode")
+async def decode_barcode(req: Request):
+    """Recebe a FOTO de um código de barras / QR (dataURL) e decodifica no servidor com zxing.
+    Foto parada = nítida = leitura confiável (resolve a instabilidade do leitor ao vivo no iOS)."""
+    raw = await req.body()
+    try:
+        b = json.loads(raw or b"{}")
+    except Exception as e:
+        return JSONResponse({"ok": False, "erro": str(e)}, status_code=400)
+    durl = b.get("foto") or ""
+    ml.dbg(f"DECODE bytes={len(raw)}")
+    try:
+        import base64, io
+        from PIL import Image, ImageOps
+        import zxingcpp
+        data = durl.split(",", 1)[-1]
+        img = Image.open(io.BytesIO(base64.b64decode(data)))
+        img = ImageOps.exif_transpose(img)            # respeita a orientação do iPhone
+        codes = []
+        for variant in (img, img.convert("L")):       # tenta colorido e cinza
+            for r in zxingcpp.read_barcodes(variant):
+                if r.text and r.text not in codes:
+                    codes.append(r.text)
+            if codes:
+                break
+        ml.dbg(f"DECODE -> {codes}")
+        return JSONResponse({"ok": True, "codes": codes})
+    except Exception as e:
+        ml.dbg(f"DECODE FAIL {e}")
+        return JSONResponse({"ok": False, "erro": str(e)}, status_code=500)
+
+
 @app.post("/api/clientlog")
 async def clientlog(req: Request):
     """Recebe erros/eventos do app no celular do conferente (pra eu ver a falha real)."""

@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v10: leitor so Code128+QR (evita misread '47-31&9#09') + exige 2 leituras iguais seguidas -->
+<!-- v11: FOTO do codigo decodificada no servidor (zxing) — caminho confiavel; leitor ao vivo sem detector experimental -->
 
 <style>
   :root{
@@ -196,6 +196,7 @@
   .sheet p{margin:0 0 14px;font-size:12px;color:var(--muted)}
   .scanview{height:260px;border-radius:14px;background:#0b1220;position:relative;overflow:hidden;margin-bottom:14px;display:flex;align-items:center;justify-content:center}
   .scanview video,.scanview canvas{width:100%!important;height:100%!important;object-fit:cover}
+  .foto-codigo-btn{display:block;text-align:center;background:var(--brand-d);color:#fff;font-weight:700;font-size:14px;padding:13px;border-radius:12px;margin-bottom:10px;cursor:pointer}
   .scanview .frame{width:76%;height:80px;border:2px solid rgba(255,255,255,.5);border-radius:10px;position:relative}
   .scanview .laser{position:absolute;left:6%;right:6%;height:2px;background:#ff4d4d;box-shadow:0 0 8px #ff4d4d;animation:scan 1.8s ease-in-out infinite}
   @keyframes scan{0%,100%{top:18%}50%{top:78%}}
@@ -370,6 +371,10 @@
                 <div id="qr-reader" style="width:100%;height:100%"></div>
                 <div id="qr-fallback" style="display:none;text-align:center;color:rgba(255,255,255,.7);font-size:11px;padding:20px">câmera não autorizada — digite o código abaixo</div>
               </div>
+              <label class="foto-codigo-btn">
+                <input type="file" accept="image/*" capture="environment" hidden onchange="fotoDoCodigo(this)">
+                📷 Tirar foto do código (mais confiável)
+              </label>
               <div class="scaninput">
                 <input id="scan-input" placeholder="ou digite qualquer ID da etiqueta" autocomplete="off" inputmode="text" />
                 <button onclick="doSearch()">Buscar</button>
@@ -662,6 +667,48 @@ function confirmar(){
 
 /* ===== SCAN ===== */
 let _qr = null, _qrBusy = false;
+// comprime preservando nitidez das barras (resolução maior, menos compressão que a foto de chegada)
+async function _comprimirCodigo(file){
+  const MAX=1600, Q=0.9;
+  try{
+    if(window.createImageBitmap){
+      const bmp=await createImageBitmap(file);
+      let w=bmp.width,h=bmp.height;
+      if(w>MAX||h>MAX){ const s=MAX/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+      const c=document.createElement("canvas"); c.width=w; c.height=h;
+      c.getContext("2d").drawImage(bmp,0,0,w,h); if(bmp.close) bmp.close();
+      return c.toDataURL("image/jpeg",Q);
+    }
+  }catch(e){}
+  return await new Promise((res,rej)=>{ const fr=new FileReader();
+    fr.onload=e=>res(e.target.result); fr.onerror=()=>rej(new Error("fr")); fr.readAsDataURL(file); });
+}
+// FOTO DO CÓDIGO: tira foto, servidor decodifica com zxing (confiável; resolve o leitor ao vivo instável do iOS)
+async function fotoDoCodigo(input){
+  const file=input.files && input.files[0]; if(!file){ return; }
+  input.value="";
+  const btn=document.querySelector(".foto-codigo-btn");
+  const txtOrig=btn?btn.innerHTML:"";
+  if(btn) btn.innerHTML="🔎 Lendo o código…";
+  try{
+    const durl=await _comprimirCodigo(file);
+    const r=await fetch("/api/decode-barcode",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({foto:durl})});
+    const j=await r.json();
+    if(btn) btn.innerHTML=txtOrig;
+    if(j.ok && j.codes && j.codes.length){
+      document.getElementById("scan-input").value=j.codes[0];
+      try{ navigator.vibrate && navigator.vibrate(40); }catch(e){}
+      doSearch();
+    }else{
+      sendLog("decode sem codigo: "+JSON.stringify(j));
+      alert("📷 Não consegui ler o código nessa foto.\nTente de novo: aproxime, foque no código de barras e evite sombra/reflexo.");
+    }
+  }catch(e){
+    if(btn) btn.innerHTML=txtOrig;
+    sendLog("fotoDoCodigo erro: "+e);
+    alert("Erro ao ler o código: "+e);
+  }
+}
 let _lastDecode=null, _lastCount=0;
 function _onDecode(decoded){
   if(_qrBusy) return;
@@ -711,11 +758,7 @@ async function startQrReader(){
       const F=window.Html5QrcodeSupportedFormats;
       if(F) fmts=[F.QR_CODE, F.CODE_128];   // SÓ os da etiqueta (ML/Correios = Code128); evita misread de outras simbologias
     }catch(e){}
-    _qr = new Html5Qrcode("qr-reader", {
-      verbose:false,
-      formatsToSupport: fmts,
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true }   // usa o detector nativo se houver (mais rápido)
-    });
+    _qr = new Html5Qrcode("qr-reader", { verbose:false, formatsToSupport: fmts });
     await _qr.start({ facingMode: "environment" },
       // caixa larga (código de barras é horizontal); fps alto p/ pegar mais rápido
       { fps: 15, qrbox: function(w,h){ return { width: Math.floor(w*0.92), height: Math.floor(Math.min(h*0.6, 200)) }; } },
