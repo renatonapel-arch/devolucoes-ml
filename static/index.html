@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v7: html5-qrcode AUTO-HOSPEDADO (CDN 2.3.10 dava 404 -> lib nunca carregava -> camera nunca funcionou) -->
+<!-- v8: upload de foto incremental (POST pequeno por foto, Salvar nao leva foto) + log do cliente p/ capturar falha real -->
 
 <style>
   :root{
@@ -587,7 +587,7 @@ let FICHA = {d:null, by:null, conf:null, view:"resumo", step:0, hero:"", blocks:
 async function openFicha(i, by){ return renderFicha(DADOS[i], by); }
 async function renderFicha(d, by){
   FICHA.d=d; FICHA.by=by; FICHA.view="resumo"; FICHA.step=0;
-  CONF = {chegada:[], avaria:[], claim_id:d.claim_id, order_id:d.order_id};
+  CONF = {chegada:[], chegadaFalhou:[], avaria:[], claim_id:d.claim_id, order_id:d.order_id};
   try{ FICHA.conf = await (await fetch("/api/conferencia/"+encodeURIComponent(d.order_id))).json(); }
   catch(e){ FICHA.conf = {etapas:{}, status:"nao_iniciada"}; }
   FICHA.lockWarn = null;
@@ -837,7 +837,7 @@ function trocarUsuario(){
 function renderUserChip(){ const u=getUser(); const el=document.getElementById("userchip"); if(el) el.textContent = u? ("👤 "+u.nome+" · "+u.perfil) : "entrar"; }
 
 /* ===== CONFERÊNCIA (multi-etapa, persistente) ===== */
-let CONF = {chegada:[], avaria:[], claim_id:null, order_id:null};
+let CONF = {chegada:[], chegadaFalhou:[], avaria:[], claim_id:null, order_id:null};
 function rotuloDesf(x){return {certo:"✅ Certo / perfeito",avariado:"⚠️ Avariado",trocado:"🔄 Trocado / golpe",faltando:"📉 Faltando peças",vazio:"📦 Caixa vazia"}[x]||x||"—";}
 function rotuloEstoque(x){return {volta:"📥 Voltou ao estoque",descarte:"🗑 Descartado",retido:"🔒 Retido como prova"}[x]||"—";}
 function etapaWrap(n, titulo, done, body){
@@ -971,6 +971,25 @@ async function comprimirFoto(file){
     fr.onerror=()=>rej(new Error("fr")); fr.readAsDataURL(file);
   });
 }
+// manda erro/evento do celular pro servidor (pra eu ver a falha real do conferente)
+function sendLog(msg){
+  try{
+    const u=getUser&&getUser();
+    fetch("/api/clientlog",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({nome:(u&&u.nome)||"?", msg:String(msg).slice(0,400)})});
+  }catch(e){}
+}
+window.addEventListener("error", e=>sendLog("JS-ERROR: "+(e.message||e)+" @"+(e.filename||"")+":"+(e.lineno||"")));
+window.addEventListener("unhandledrejection", e=>sendLog("PROMISE-REJ: "+(e.reason&&e.reason.message||e.reason)));
+
+// sobe UMA foto na hora (POST pequeno). Retorna true/false.
+async function uploadAnexo(durl, etapa, tipo){
+  try{
+    const r=await fetch("/api/conferencia/"+encodeURIComponent(FICHA.d.order_id)+"/anexo",{method:"POST",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify({etapa, tipo, foto:durl})});
+    return r.ok;
+  }catch(e){ sendLog("uploadAnexo falhou: "+e); return false; }
+}
 async function snap(input, tipo){
   const file = input.files && input.files[0]; if(!file) return;
   const slot = input.closest(".pslot");
@@ -978,22 +997,34 @@ async function snap(input, tipo){
   const isVid = (file.type||"").startsWith("video");
   if(isVid){
     // VÍDEO: não carrega na memória (readAsDataURL de vídeo grande trava/recarrega o iPhone).
-    // Só marca como anexado — o vídeo de chegada não precisa subir agora.
     slot.classList.add("done"); if(sp) sp.textContent="🎬";
     input.value="";
     return;
   }
   if(sp) sp.textContent="⏳";
+  let durl;
   try{
-    const durl = await comprimirFoto(file);
-    (tipo==="avaria"?CONF.avaria:CONF.chegada).push(durl);
-    slot.style.backgroundImage=`url(${durl})`; slot.style.backgroundSize="cover"; slot.style.backgroundPosition="center";
-    slot.classList.add("done"); if(sp) sp.textContent="✅";
+    durl = await comprimirFoto(file);
   }catch(e){
-    if(sp) sp.textContent="＋";
+    if(sp) sp.textContent="＋"; input.value="";
+    sendLog("comprimirFoto falhou: "+e);
     alert("📷 Não consegui processar essa foto. Tire de novo, por favor.");
+    return;
   }
-  input.value="";   // permite re-tirar a mesma foto se precisar
+  // mostra a miniatura na hora
+  (tipo==="avaria"?CONF.avaria:CONF.chegada).push(durl);
+  slot.style.backgroundImage=`url(${durl})`; slot.style.backgroundSize="cover"; slot.style.backgroundPosition="center";
+  slot.classList.add("done");
+  input.value="";
+  // CHEGADA: sobe a foto JÁ (assim o "Salvar" não precisa carregar nenhuma foto)
+  if(tipo!=="avaria"){
+    if(sp) sp.textContent="⏫";
+    const ok = await uploadAnexo(durl, "chegada", "chegada");
+    if(ok){ if(sp) sp.textContent="✅"; }
+    else { if(sp) sp.textContent="⚠️"; CONF.chegadaFalhou.push(durl); }  // guarda p/ reenviar no Salvar
+  } else {
+    if(sp) sp.textContent="✅";   // avaria sobe junto com a reclamação
+  }
 }
 
 /* ===== handlers que SALVAM cada etapa ===== */
@@ -1014,18 +1045,19 @@ async function salvarChegada(recebidos){
   if(CONF.chegada.length<1){ alert("📸 Tire ao menos 1 foto da chegada."); return; }
   const N=FICHA.d.vol_total||1; const r=recebidos||1;
   const btn=event&&event.target; if(btn){ btn.disabled=true; btn.textContent="Salvando…"; }
-  const resp = await postEtapa("chegada", {recebidos:r, vol_total:N, anexos:CONF.chegada, feito: r>=N});
+  // fotos já subiram na hora; aqui só reenvia as que falharam (quase sempre nenhuma) => POST minúsculo
+  const resp = await postEtapa("chegada", {recebidos:r, vol_total:N, anexos:CONF.chegadaFalhou, feito: r>=N});
   if(btn){ btn.disabled=false; btn.textContent="Salvar e avançar →"; }
   if(!resp || resp.__erro) return;          // mantém as fotos na tela, não avança
-  CONF.chegada=[];
+  CONF.chegada=[]; CONF.chegadaFalhou=[];
   avancarPasso(resp);                        // avança usando a resposta (sem 2º GET)
 }
 async function registrarVolume(n, N){
   if(!requireUser()) return;
   if(CONF.chegada.length<1){ alert("📸 Tire ao menos 1 foto deste volume."); return; }
-  const resp = await postEtapa("chegada", {recebidos:n, vol_total:N, anexos:CONF.chegada, feito: n>=N});
+  const resp = await postEtapa("chegada", {recebidos:n, vol_total:N, anexos:CONF.chegadaFalhou, feito: n>=N});
   if(!resp || resp.__erro) return;       // erro: mantém fotos, não zera
-  CONF.chegada=[];                       // zera p/ o próximo volume
+  CONF.chegada=[]; CONF.chegadaFalhou=[]; // zera p/ o próximo volume
   if(n>=N){ avancarPasso(resp); }
   else { FICHA.conf=resp; paintFicha(); }   // continua na etapa, mostra n recebidos
 }

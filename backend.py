@@ -4,7 +4,7 @@ Backend Fase 1 — Devoluções ML (SÓ LEITURA).
 Serve o front mobile + 3 endpoints ao vivo. Nenhuma escrita no ML.
 Rodar:  uvicorn backend:app --host 127.0.0.1 --port 8077
 """
-import os
+import os, json
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -51,9 +51,53 @@ def get_conf(oid: str):
 
 @app.post("/api/conferencia/{oid}/etapa")
 async def post_etapa(oid: str, req: Request):
-    b = await req.json()
-    return JSONResponse(ml.save_etapa(oid, b.get("etapa"), b.get("dados") or {},
-                                      b.get("perfil", "?"), b.get("nome", "?"), _achar_item(oid)))
+    raw = await req.body()
+    try:
+        b = json.loads(raw or b"{}")
+    except Exception as e:
+        ml.dbg(f"ETAPA {oid} JSON-FAIL bytes={len(raw)} err={e}")
+        return JSONResponse({"erro": "payload inválido", "detalhe": str(e)}, status_code=400)
+    dados = b.get("dados") or {}
+    nfotos = len(dados.get("anexos") or [])
+    ml.dbg(f"ETAPA {oid} etapa={b.get('etapa')} bytes={len(raw)} fotos={nfotos} nome={b.get('nome')}")
+    try:
+        out = ml.save_etapa(oid, b.get("etapa"), dados, b.get("perfil", "?"), b.get("nome", "?"), _achar_item(oid))
+        ml.dbg(f"ETAPA {oid} OK status={out.get('status')}")
+        return JSONResponse(out)
+    except Exception as e:
+        import traceback
+        ml.dbg(f"ETAPA {oid} SAVE-FAIL {e}\n{traceback.format_exc()[:500]}")
+        return JSONResponse({"erro": "falha ao salvar", "detalhe": str(e)}, status_code=500)
+
+
+@app.post("/api/conferencia/{oid}/anexo")
+async def post_anexo(oid: str, req: Request):
+    """Sobe UMA foto na hora (POST pequeno) — desacopla o upload do 'Salvar e avançar'."""
+    raw = await req.body()
+    try:
+        b = json.loads(raw or b"{}")
+    except Exception as e:
+        ml.dbg(f"ANEXO {oid} JSON-FAIL bytes={len(raw)} err={e}")
+        return JSONResponse({"ok": False, "erro": str(e)}, status_code=400)
+    foto = b.get("foto")
+    ml.dbg(f"ANEXO {oid} etapa={b.get('etapa')} tipo={b.get('tipo')} bytes={len(raw)}")
+    try:
+        tot = ml.save_anexos(oid, b.get("etapa", "chegada"), b.get("tipo", "chegada"), [foto] if foto else [])
+        return JSONResponse({"ok": True, "total": tot})
+    except Exception as e:
+        ml.dbg(f"ANEXO {oid} FAIL {e}")
+        return JSONResponse({"ok": False, "erro": str(e)}, status_code=500)
+
+
+@app.post("/api/clientlog")
+async def clientlog(req: Request):
+    """Recebe erros/eventos do app no celular do conferente (pra eu ver a falha real)."""
+    try:
+        b = await req.json()
+        ml.dbg(f"CLIENT {b.get('nome','?')} | {b.get('msg','')[:400]}")
+    except Exception:
+        pass
+    return JSONResponse({"ok": True})
 
 
 @app.post("/api/conferencia/{oid}/lock")

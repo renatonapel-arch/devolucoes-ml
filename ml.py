@@ -652,6 +652,16 @@ def get_anexos(oid):
     return [{"id": r["id"], "etapa": r["etapa"], "tipo": r["tipo"], "data": r["data"], "em": r["criado_em"]} for r in rows]
 
 
+# ---- log de debug persistente (vive no volume /data) p/ capturar falhas reais do conferente ----
+DEBUG_LOG = os.path.join(os.path.dirname(DB_FILE) or ".", "debug_conferente.log")
+def dbg(msg):
+    try:
+        with open(DEBUG_LOG, "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now().strftime('%d/%m %H:%M:%S')} | {msg}\n")
+    except Exception:
+        pass
+
+
 def _req_etapas(reg):
     desf = (reg.get("etapas", {}).get("abertura") or {}).get("desfecho")
     base = ["chegada", "abertura", "nf_devolucao", "financeiro", "compensacao", "estoque"]
