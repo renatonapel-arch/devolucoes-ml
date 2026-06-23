@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v5: prova de chegada blindada (compressao foto, video sem readAsDataURL, erro visivel, avanca pela resposta) -->
+<!-- v6: camera iOS pede permissao DENTRO do gesto (getUserMedia direto, sem setTimeout) + tocar p/ ativar -->
 
 <style>
   :root{
@@ -661,49 +661,64 @@ function confirmar(){
 
 /* ===== SCAN ===== */
 let _qr = null, _qrBusy = false;
+function _onDecode(decoded){
+  if(_qrBusy) return; _qrBusy=true;
+  document.getElementById("scan-input").value = decoded;
+  try{ navigator.vibrate && navigator.vibrate(40); }catch(e){}
+  stopQrReader(); doSearch();
+  setTimeout(()=>{_qrBusy=false;}, 1500);
+}
+function mostrarFallbackCamera(e){
+  const fb=document.getElementById("qr-fallback");
+  fb.style.display="flex";
+  fb.style.alignItems="center"; fb.style.justifyContent="center"; fb.style.cursor="pointer";
+  fb.innerHTML = "<div style='text-align:center;padding:14px;color:rgba(255,255,255,.85)'>📷 <b>Tocar para ativar a câmera</b>"+
+    "<div style='font-size:11px;margin-top:6px;opacity:.7;line-height:1.5'>Se já negou antes: Ajustes → Safari → Câmera → 'Permitir'.<br>Ou digite o código abaixo.</div></div>";
+  fb.onclick = ()=>{ startQrReader(); };   // toque = novo gesto -> tenta de novo (iOS exige gesto)
+  try{ console.error("cam err:", String(e)); }catch(_){}
+}
+// IMPORTANTE iOS: getUserMedia só mostra o prompt se for chamado DENTRO do gesto do toque.
+// Por isso startQrReader é chamado direto no onclick (sem setTimeout) e pede a câmera ANTES de tudo.
 async function startQrReader(){
+  const fb=document.getElementById("qr-fallback");
+  fb.style.display="none"; fb.onclick=null;
+  if(!window.Html5Qrcode || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    return mostrarFallbackCamera("sem suporte a câmera neste navegador");
+  }
+  // 1) dispara o prompt do iOS DENTRO do gesto (1ª chamada síncrona, antes de qualquer await que quebraria o gesto)
+  let stream;
   try{
-    if(!window.Html5Qrcode){ document.getElementById("qr-fallback").style.display="block"; return; }
-    if(_qr){ try{ await _qr.stop(); }catch(e){} _qr.clear(); _qr=null; }
-    _qr = new Html5Qrcode("qr-reader", {verbose:false});
-    await _qr.start({ facingMode: { exact: "environment" } },
-      { fps: 10, qrbox: function(w,h){ const s=Math.floor(Math.min(w,h)*0.8); return {width:s, height:Math.max(60, Math.floor(s*0.4))}; }, aspectRatio: 16/9 },
-      (decoded) => {
-        if(_qrBusy) return; _qrBusy=true;
-        document.getElementById("scan-input").value = decoded;
-        try{ navigator.vibrate && navigator.vibrate(40); }catch(e){}
-        stopQrReader(); doSearch();
-        setTimeout(()=>{_qrBusy=false;}, 1500);
-      },
-      ()=>{}  // ignore errors per frame
-    );
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } });
   }catch(e){
-    // fallback: tenta sem 'exact'
-    try{
-      _qr = new Html5Qrcode("qr-reader");
-      await _qr.start({ facingMode: "environment" }, {fps:10,qrbox:{width:240,height:140}},
-        (decoded)=>{ if(_qrBusy)return; _qrBusy=true; document.getElementById("scan-input").value=decoded; stopQrReader(); doSearch(); setTimeout(()=>{_qrBusy=false;},1500); }, ()=>{});
-    }catch(e2){
-      const fb=document.getElementById("qr-fallback");
-      fb.style.display="block";
-      fb.innerHTML = "📷 Câmera não disponível.<br><small style='display:block;margin-top:6px;line-height:1.5'>"+
-        "Se for a 1ª vez: aceite a permissão da câmera.<br>"+
-        "Se já negou: Ajustes → Safari → Câmera → 'Permitir' p/ este site.<br>"+
-        "(você pode digitar o código abaixo)</small>";
-      console.error("qr err:", e, e2);
-    }
+    return mostrarFallbackCamera(e);   // negou ou indisponível
+  }
+  try{ stream.getTracks().forEach(t=>t.stop()); }catch(e){}   // só queríamos a permissão; o leitor abre a sua
+  // 2) permissão concedida -> abre o leitor de código
+  try{
+    if(_qr){ try{ await _qr.stop(); }catch(e){} try{ _qr.clear(); }catch(e){} _qr=null; }
+    _qr = new Html5Qrcode("qr-reader", {verbose:false});
+    await _qr.start({ facingMode: "environment" },
+      { fps: 10, qrbox: function(w,h){ const s=Math.floor(Math.min(w,h)*0.8); return {width:s, height:Math.max(60, Math.floor(s*0.4))}; } },
+      _onDecode, ()=>{});
+  }catch(e){
+    mostrarFallbackCamera(e);
   }
 }
 async function stopQrReader(){
   if(_qr){ try{ await _qr.stop(); }catch(e){} try{ _qr.clear(); }catch(e){} _qr=null; }
 }
-function openScan(){ resetScan(); document.getElementById("sheet").classList.add("open"); setTimeout(startQrReader, 250); }
+function openScan(){
+  resetScan();
+  document.getElementById("sheet").classList.add("open");
+  startQrReader();   // DIRETO no gesto do toque (sem setTimeout) — senão o iOS não pede permissão
+}
 function closeScan(silent){ stopQrReader(); document.getElementById("sheet").classList.remove("open"); }
 function resetScan(){
   document.getElementById("scan-step1").style.display="block";
   document.getElementById("scan-notfound").style.display="none";
   document.getElementById("scan-input").value="";
-  document.getElementById("qr-fallback").style.display="none";
+  const fb=document.getElementById("qr-fallback");
+  fb.style.display="none"; fb.onclick=null;
 }
 const FIELDS = ["order_id","pack_id","claim_id","shipment_id","tracking","item_id"];
 const TXT_FIELDS = ["produto","comprador"];
