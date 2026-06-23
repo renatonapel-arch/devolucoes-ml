@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v8: upload de foto incremental (POST pequeno por foto, Salvar nao leva foto) + log do cliente p/ capturar falha real -->
+<!-- v9: CAUSA RAIZ achada no log — devolucao da BUSCA (fora da lista) dava 'item desconhecido'; front agora manda o item. + leitor Code128 + feed maior -->
 
 <style>
   :root{
@@ -194,7 +194,8 @@
   .grab{width:42px;height:5px;border-radius:3px;background:#d4dae6;margin:6px auto 14px}
   .sheet h3{margin:0 0 3px;font-size:16px}
   .sheet p{margin:0 0 14px;font-size:12px;color:var(--muted)}
-  .scanview{height:150px;border-radius:14px;background:#0b1220;position:relative;overflow:hidden;margin-bottom:14px;display:flex;align-items:center;justify-content:center}
+  .scanview{height:260px;border-radius:14px;background:#0b1220;position:relative;overflow:hidden;margin-bottom:14px;display:flex;align-items:center;justify-content:center}
+  .scanview video,.scanview canvas{width:100%!important;height:100%!important;object-fit:cover}
   .scanview .frame{width:76%;height:80px;border:2px solid rgba(255,255,255,.5);border-radius:10px;position:relative}
   .scanview .laser{position:absolute;left:6%;right:6%;height:2px;background:#ff4d4d;box-shadow:0 0 8px #ff4d4d;animation:scan 1.8s ease-in-out infinite}
   @keyframes scan{0%,100%{top:18%}50%{top:78%}}
@@ -592,7 +593,7 @@ async function renderFicha(d, by){
   catch(e){ FICHA.conf = {etapas:{}, status:"nao_iniciada"}; }
   FICHA.lockWarn = null;
   try{ const u=getUser();
-    if(u){ const lk=await (await fetch("/api/conferencia/"+encodeURIComponent(d.order_id)+"/lock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({perfil:u.perfil,nome:u.nome})})).json();
+    if(u){ const lk=await (await fetch("/api/conferencia/"+encodeURIComponent(d.order_id)+"/lock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({perfil:u.perfil,nome:u.nome,item:d})})).json();
       if(lk && lk.anterior) FICHA.lockWarn = lk.anterior; }
   }catch(e){}
   const f = FASE[d.fase]||{t:d.fase};
@@ -696,9 +697,20 @@ async function startQrReader(){
   // 2) permissão concedida -> abre o leitor de código
   try{
     if(_qr){ try{ await _qr.stop(); }catch(e){} try{ _qr.clear(); }catch(e){} _qr=null; }
-    _qr = new Html5Qrcode("qr-reader", {verbose:false});
+    // formatos: QR + códigos de barras 1D (Code128 é o da etiqueta ML "47..." e do Correios "AP..BR")
+    let fmts;
+    try{
+      const F=window.Html5QrcodeSupportedFormats;
+      if(F) fmts=[F.QR_CODE, F.CODE_128, F.CODE_39, F.EAN_13, F.ITF, F.CODABAR];
+    }catch(e){}
+    _qr = new Html5Qrcode("qr-reader", {
+      verbose:false,
+      formatsToSupport: fmts,
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true }   // usa o detector nativo se houver (mais rápido)
+    });
     await _qr.start({ facingMode: "environment" },
-      { fps: 10, qrbox: function(w,h){ const s=Math.floor(Math.min(w,h)*0.8); return {width:s, height:Math.max(60, Math.floor(s*0.4))}; } },
+      // caixa larga (código de barras é horizontal); fps alto p/ pegar mais rápido
+      { fps: 15, qrbox: function(w,h){ return { width: Math.floor(w*0.92), height: Math.floor(Math.min(h*0.6, 200)) }; } },
       _onDecode, ()=>{});
   }catch(e){
     mostrarFallbackCamera(e);
@@ -1032,10 +1044,13 @@ async function postEtapa(etapa, dados){
   const u=requireUser(); if(!u) return null;
   try{
     const r=await fetch("/api/conferencia/"+encodeURIComponent(FICHA.d.order_id)+"/etapa",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({etapa, dados, perfil:u.perfil, nome:u.nome})});
+      body:JSON.stringify({etapa, dados, perfil:u.perfil, nome:u.nome, item:FICHA.d})});  // item: p/ devolução achada pela busca (fora da lista)
     if(!r.ok) throw new Error("HTTP "+r.status);
-    return await r.json();
+    const j=await r.json();
+    if(j && j.erro){ sendLog("etapa retornou erro: "+j.erro); alert("⚠️ "+j.erro+"\nTente de novo."); return {__erro:true}; }
+    return j;
   }catch(e){
+    sendLog("postEtapa falhou: "+e);
     alert("⚠️ Não consegui salvar — verifique a internet.\nSuas fotos continuam aqui, é só tocar em Salvar de novo.\n\n("+e+")");
     return {__erro:true};
   }

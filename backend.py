@@ -59,10 +59,13 @@ async def post_etapa(oid: str, req: Request):
         return JSONResponse({"erro": "payload inválido", "detalhe": str(e)}, status_code=400)
     dados = b.get("dados") or {}
     nfotos = len(dados.get("anexos") or [])
-    ml.dbg(f"ETAPA {oid} etapa={b.get('etapa')} bytes={len(raw)} fotos={nfotos} nome={b.get('nome')}")
+    # item: tenta a lista ao vivo; se não achar (devolução achada pela BUSCA, fora da lista),
+    # usa o snapshot que o próprio front mandou. Sem isso = "item desconhecido".
+    item = _achar_item(oid) or b.get("item")
+    ml.dbg(f"ETAPA {oid} etapa={b.get('etapa')} bytes={len(raw)} fotos={nfotos} nome={b.get('nome')} item={'sim' if item else 'NAO'}")
     try:
-        out = ml.save_etapa(oid, b.get("etapa"), dados, b.get("perfil", "?"), b.get("nome", "?"), _achar_item(oid))
-        ml.dbg(f"ETAPA {oid} OK status={out.get('status')}")
+        out = ml.save_etapa(oid, b.get("etapa"), dados, b.get("perfil", "?"), b.get("nome", "?"), item)
+        ml.dbg(f"ETAPA {oid} OK status={out.get('status')} erro={out.get('erro')}")
         return JSONResponse(out)
     except Exception as e:
         import traceback
@@ -103,7 +106,7 @@ async def clientlog(req: Request):
 @app.post("/api/conferencia/{oid}/lock")
 async def post_lock(oid: str, req: Request):
     b = await req.json()
-    return JSONResponse(ml.claim_lock(oid, b.get("perfil", "?"), b.get("nome", "?"), _achar_item(oid)))
+    return JSONResponse(ml.claim_lock(oid, b.get("perfil", "?"), b.get("nome", "?"), _achar_item(oid) or b.get("item")))
 
 
 @app.get("/api/conferencia/{oid}/anexos")
