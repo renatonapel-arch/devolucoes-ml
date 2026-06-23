@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v9: CAUSA RAIZ achada no log — devolucao da BUSCA (fora da lista) dava 'item desconhecido'; front agora manda o item. + leitor Code128 + feed maior -->
+<!-- v10: leitor so Code128+QR (evita misread '47-31&9#09') + exige 2 leituras iguais seguidas -->
 
 <style>
   :root{
@@ -662,12 +662,19 @@ function confirmar(){
 
 /* ===== SCAN ===== */
 let _qr = null, _qrBusy = false;
+let _lastDecode=null, _lastCount=0;
 function _onDecode(decoded){
-  if(_qrBusy) return; _qrBusy=true;
+  if(_qrBusy) return;
+  decoded = (decoded||"").trim();
+  // exige 2 leituras IGUAIS seguidas — descarta misread de 1 frame (lixo não se repete idêntico)
+  if(decoded!==_lastDecode){ _lastDecode=decoded; _lastCount=1; return; }
+  _lastCount++;
+  if(_lastCount<2) return;
+  _qrBusy=true;
   document.getElementById("scan-input").value = decoded;
   try{ navigator.vibrate && navigator.vibrate(40); }catch(e){}
   stopQrReader(); doSearch();
-  setTimeout(()=>{_qrBusy=false;}, 1500);
+  setTimeout(()=>{_qrBusy=false; _lastDecode=null; _lastCount=0;}, 1500);
 }
 function mostrarFallbackCamera(e){
   const fb=document.getElementById("qr-fallback");
@@ -697,11 +704,12 @@ async function startQrReader(){
   // 2) permissão concedida -> abre o leitor de código
   try{
     if(_qr){ try{ await _qr.stop(); }catch(e){} try{ _qr.clear(); }catch(e){} _qr=null; }
+    _lastDecode=null; _lastCount=0; _qrBusy=false;   // zera o filtro de 2-leituras a cada abertura
     // formatos: QR + códigos de barras 1D (Code128 é o da etiqueta ML "47..." e do Correios "AP..BR")
     let fmts;
     try{
       const F=window.Html5QrcodeSupportedFormats;
-      if(F) fmts=[F.QR_CODE, F.CODE_128, F.CODE_39, F.EAN_13, F.ITF, F.CODABAR];
+      if(F) fmts=[F.QR_CODE, F.CODE_128];   // SÓ os da etiqueta (ML/Correios = Code128); evita misread de outras simbologias
     }catch(e){}
     _qr = new Html5Qrcode("qr-reader", {
       verbose:false,
