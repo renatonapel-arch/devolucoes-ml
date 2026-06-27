@@ -307,16 +307,12 @@ def _candidatos():
     seller = _tok["seller"]
     if not seller:
         return cand
-    # REGRA DEFINITIVA (igual painel ML "A caminho"): só entra o que o comprador JÁ ENVIOU
-    # e o vendedor AINDA NÃO RECEBEU. A autoridade é o return.status do ML (provado: o ML
-    # marca return.status='shipped' = "a caminho"; 'delivered' = já recebido → FORA).
-    # Entra na lista o que é RELEVANTE pro galpão:
-    #  - 'shipped'   = comprador postou, A CAMINHO (ainda não recebemos)
-    #  - 'delivered' recente = CHEGOU no galpão, precisa conferência (o gestor precisa ver quem demora)
+    # A LISTA = só o que está A CAMINHO (comprador postou, ainda em trânsito pra Napel).
+    # NÃO usar 'delivered' do ML como "chegou no galpão": o ML marca delivered quando a
+    # devolução chega na LOGÍSTICA/CD do ML, não na porta da Napel (mostrava 42 "chegou"
+    # quando só havia 2 pacotes físicos). Quando o pacote chega de fato, o conferente BIPA
+    # (a busca acha qualquer envio, mesmo delivered) — esse é o sinal real de chegada.
     A_CAMINHO = {"shipped"}
-    JANELA_CHEGOU = 30        # dias: chegados recentes ainda relevantes pra conferir/cobrar
-    from datetime import timedelta
-    hoje = _today()
     claims_por_order = {}     # rid -> cid
     for status, max_pages in (("opened", 40), ("closed", 20)):
         offset = 0
@@ -336,16 +332,8 @@ def _candidatos():
         rt = g(f"/post-purchase/v2/claims/{cid}/returns") or {}
         if not (rt.get("shipments")):
             continue
-        st = rt.get("status")
-        if st in A_CAMINHO:                 # a caminho
+        if rt.get("status") in A_CAMINHO:   # só 'shipped' (a caminho, ainda não chegou)
             cand[str(oid)] = "devolucao"
-        elif st == "delivered":             # chegou — só se recente (não poluir com histórico antigo)
-            last = (rt.get("last_updated") or rt.get("date_closed") or rt.get("date_created") or "")[:10]
-            try:
-                if last and (hoje - date.fromisoformat(last)).days <= JANELA_CHEGOU:
-                    cand[str(oid)] = "devolucao"
-            except Exception:
-                pass
     # não-entregas: ENVIO que falhou e está VOLTANDO ao remetente (ainda não chegou).
     # shipping.status=not_delivered pega venda antiga voltando agora; mantém só os EM TRÂNSITO
     # de volta (returning_*), NÃO os que já voltaram (returned/returned_to_hub) nem lost/etc.
@@ -396,12 +384,10 @@ def _do_build():
                     itens.append(it)
             except Exception:
                 continue
-        # passa o que é relevante: a caminho (shipped/returning_*) E chegou (delivered).
-        # Fora: 'label_generated' (em preparação, comprador não postou).
-        ACEITA_FASE = {"shipped", "returning_to_sender", "returning_to_hub", "delivered"}
+        # só A CAMINHO (shipped/returning_*). 'delivered' NÃO entra (não é "chegou no galpão" — ver _candidatos).
+        ACEITA_FASE = {"shipped", "returning_to_sender", "returning_to_hub"}
         itens = [it for it in itens if it.get("fase") in ACEITA_FASE]
-        # ordena: CHEGOU primeiro (precisa conferir já), depois a caminho; dentro, maior valor
-        rank = {"delivered": -2, "shipped": 0, "label_generated": 1, "returning_to_sender": 2, "returning_to_hub": 2}
+        rank = {"shipped": 0, "label_generated": 1, "returning_to_sender": 2, "returning_to_hub": 2}
         itens.sort(key=lambda x: (rank.get(x["fase"], 3), -x["valor"]))
         out = {"ts": time.time(), "atualizado": _now().strftime("%d/%m/%Y %H:%M"),
                "total": len(itens), "itens": itens, "construindo": False}

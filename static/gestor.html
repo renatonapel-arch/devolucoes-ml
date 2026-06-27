@@ -266,11 +266,9 @@ function renderKpis(){
   const mar=DADOS.filter(d=>d.destino==="seller_address").length, cd=DADOS.filter(d=>d.destino==="warehouse").length;
   const hot=ref.filter(d=>(d.dias_aberta||0)>=7).length, med=DADOS.filter(d=>d.claim_type==="mediations").length;
   const valTot=DADOS.reduce((s,d)=>s+d.valor,0);
-  const chegouAg=DADOS.filter(d=>d.fase==="delivered" && d.conf_status!=="concluida").length;
-  const chegouParado=DADOS.filter(d=>d.fase==="delivered" && d.conf_status==="nao_iniciada").length;
   document.getElementById("kpis").innerHTML=`
-    <div class="kpi"><div class="ic">📦</div><div class="lbl">Voltando agora</div><div class="val">${n}</div><div class="sub">${money(valTot)} em jogo</div></div>
-    <div class="kpi ${chegouParado>0?'v-danger':'v-success'}"><div class="ic">📍</div><div class="lbl">Chegou · conferir</div><div class="val">${chegouAg}</div><div class="sub">${chegouParado>0?`🔴 ${chegouParado} sem ninguém iniciar`:'todas em conferência'}</div></div>
+    <div class="kpi"><div class="ic">📦</div><div class="lbl">A caminho do galpão</div><div class="val">${n}</div><div class="sub">${money(valTot)} em jogo</div></div>
+    <div class="kpi v-warn"><div class="ic">🔧</div><div class="lbl">Em conferência</div><div class="val">${CONTAGEM.em_andamento||0}</div><div class="sub">conferente começou, falta terminar</div></div>
     <div class="kpi v-danger"><div class="ic">💸</div><div class="lbl">Reembolsado s/ produto</div><div class="val">${money(exp)}</div><div class="sub">${ref.length} casos · ${hot} há +7 dias</div></div>
     <div class="kpi v-info"><div class="ic">🔵</div><div class="lbl">Vêm pro seu galpão</div><div class="val">${mar}</div><div class="sub">🟢 ${cd} ficam no CD do ML</div></div>
     <div class="kpi v-warn"><div class="ic">⚖️</div><div class="lbl">Em mediação ML</div><div class="val">${med}</div><div class="sub">disputas abertas</div></div>
