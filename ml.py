@@ -231,6 +231,8 @@ def build_item(oid, origem="devolucao"):
                 status_money = rt.get("status_money")
                 fase = rt.get("status")
                 dev_aberta = (rt.get("date_created") or "")[:10] or None
+                if fase == "delivered":   # chegou no galpão — guarda quando
+                    o["_chegou_em"] = (rt.get("last_updated") or rt.get("date_closed") or "")[:10] or None
                 shp = rt["shipments"][0]
                 d = shp.get("destination") or {}
                 destino = d.get("name")
@@ -270,6 +272,7 @@ def build_item(oid, origem="devolucao"):
         "local": local or "—", "vol_total": 1,
         "compras": hist["compras"], "devolucoes": hist["devolucoes"],
         "dev_aberta": dev_aberta, "dias_aberta": _dias(dev_aberta) if dev_aberta else None,
+        "chegou_em": o.get("_chegou_em"), "chegou_dias": _dias(o.get("_chegou_em")) if o.get("_chegou_em") else None,
     }
 
 
@@ -297,7 +300,13 @@ def _candidatos():
     # REGRA DEFINITIVA (igual painel ML "A caminho"): só entra o que o comprador JÁ ENVIOU
     # e o vendedor AINDA NÃO RECEBEU. A autoridade é o return.status do ML (provado: o ML
     # marca return.status='shipped' = "a caminho"; 'delivered' = já recebido → FORA).
-    A_CAMINHO = {"shipped"}   # comprador postou a devolução, está em trânsito pra Napel
+    # Entra na lista o que é RELEVANTE pro galpão:
+    #  - 'shipped'   = comprador postou, A CAMINHO (ainda não recebemos)
+    #  - 'delivered' recente = CHEGOU no galpão, precisa conferência (o gestor precisa ver quem demora)
+    A_CAMINHO = {"shipped"}
+    JANELA_CHEGOU = 30        # dias: chegados recentes ainda relevantes pra conferir/cobrar
+    from datetime import timedelta
+    hoje = _today()
     claims_por_order = {}     # rid -> cid
     for status, max_pages in (("opened", 40), ("closed", 20)):
         offset = 0
@@ -317,8 +326,16 @@ def _candidatos():
         rt = g(f"/post-purchase/v2/claims/{cid}/returns") or {}
         if not (rt.get("shipments")):
             continue
-        if rt.get("status") in A_CAMINHO:   # só 'shipped' (a caminho, não recebido)
+        st = rt.get("status")
+        if st in A_CAMINHO:                 # a caminho
             cand[str(oid)] = "devolucao"
+        elif st == "delivered":             # chegou — só se recente (não poluir com histórico antigo)
+            last = (rt.get("last_updated") or rt.get("date_closed") or rt.get("date_created") or "")[:10]
+            try:
+                if last and (hoje - date.fromisoformat(last)).days <= JANELA_CHEGOU:
+                    cand[str(oid)] = "devolucao"
+            except Exception:
+                pass
     # não-entregas: ENVIO que falhou e está VOLTANDO ao remetente (ainda não chegou).
     # shipping.status=not_delivered pega venda antiga voltando agora; mantém só os EM TRÂNSITO
     # de volta (returning_*), NÃO os que já voltaram (returned/returned_to_hub) nem lost/etc.
@@ -369,10 +386,12 @@ def _do_build():
                     itens.append(it)
             except Exception:
                 continue
-        # trava: só "a caminho" (comprador enviou, não recebemos). Nada de delivered/em preparação.
-        ACEITA_FASE = {"shipped", "returning_to_sender", "returning_to_hub"}
+        # passa o que é relevante: a caminho (shipped/returning_*) E chegou (delivered).
+        # Fora: 'label_generated' (em preparação, comprador não postou).
+        ACEITA_FASE = {"shipped", "returning_to_sender", "returning_to_hub", "delivered"}
         itens = [it for it in itens if it.get("fase") in ACEITA_FASE]
-        rank = {"delivered": -1, "shipped": 0, "label_generated": 1, "returning_to_sender": 2, "returning_to_hub": 2}
+        # ordena: CHEGOU primeiro (precisa conferir já), depois a caminho; dentro, maior valor
+        rank = {"delivered": -2, "shipped": 0, "label_generated": 1, "returning_to_sender": 2, "returning_to_hub": 2}
         itens.sort(key=lambda x: (rank.get(x["fase"], 3), -x["valor"]))
         out = {"ts": time.time(), "atualizado": _now().strftime("%d/%m/%Y %H:%M"),
                "total": len(itens), "itens": itens, "construindo": False}

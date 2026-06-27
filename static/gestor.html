@@ -266,8 +266,11 @@ function renderKpis(){
   const mar=DADOS.filter(d=>d.destino==="seller_address").length, cd=DADOS.filter(d=>d.destino==="warehouse").length;
   const hot=ref.filter(d=>(d.dias_aberta||0)>=7).length, med=DADOS.filter(d=>d.claim_type==="mediations").length;
   const valTot=DADOS.reduce((s,d)=>s+d.valor,0);
+  const chegouAg=DADOS.filter(d=>d.fase==="delivered" && d.conf_status!=="concluida").length;
+  const chegouParado=DADOS.filter(d=>d.fase==="delivered" && d.conf_status==="nao_iniciada").length;
   document.getElementById("kpis").innerHTML=`
     <div class="kpi"><div class="ic">📦</div><div class="lbl">Voltando agora</div><div class="val">${n}</div><div class="sub">${money(valTot)} em jogo</div></div>
+    <div class="kpi ${chegouParado>0?'v-danger':'v-success'}"><div class="ic">📍</div><div class="lbl">Chegou · conferir</div><div class="val">${chegouAg}</div><div class="sub">${chegouParado>0?`🔴 ${chegouParado} sem ninguém iniciar`:'todas em conferência'}</div></div>
     <div class="kpi v-danger"><div class="ic">💸</div><div class="lbl">Reembolsado s/ produto</div><div class="val">${money(exp)}</div><div class="sub">${ref.length} casos · ${hot} há +7 dias</div></div>
     <div class="kpi v-info"><div class="ic">🔵</div><div class="lbl">Vêm pro seu galpão</div><div class="val">${mar}</div><div class="sub">🟢 ${cd} ficam no CD do ML</div></div>
     <div class="kpi v-warn"><div class="ic">⚖️</div><div class="lbl">Em mediação ML</div><div class="val">${med}</div><div class="sub">disputas abertas</div></div>
@@ -316,7 +319,14 @@ function renderTable(){
     const f=fz(d.fase), rc=reinc(d);
     const dest = d.destino==="seller_address"?'<span class="pill p-info">🔵 Maringá</span>':d.destino==="warehouse"?'<span class="pill p-success">🟢 CD ML</span>':'<span class="muted">—</span>';
     const mon = d.status_money==="refunded"?'<span class="pill p-danger">⚠️ Reembolsado</span>':d.status_money==="retained"?'<span class="pill p-success">Retido</span>':'<span class="muted">—</span>';
-    const dias = d.dias_aberta!=null?`<span class="days ${d.dias_aberta>=7?'hot':''}">${d.dias_aberta}d</span>`:'<span class="muted">—</span>';
+    // chegou: mostra há quantos dias chegou; VERMELHO se chegou e ninguém iniciou (atraso do funcionário)
+    let dias;
+    if(d.fase==="delivered" && d.chegou_dias!=null){
+      const atrasado = d.conf_status==="nao_iniciada" && d.chegou_dias>=1;
+      dias=`<span class="days ${atrasado?'hot':''}" title="chegou há ${d.chegou_dias} dia(s) — ${d.conf_status==='nao_iniciada'?'NINGUÉM iniciou':'em conferência'}">📍 ${d.chegou_dias}d</span>`;
+    } else {
+      dias = d.dias_aberta!=null?`<span class="days ${d.dias_aberta>=7?'hot':''}">${d.dias_aberta}d</span>`:'<span class="muted">—</span>';
+    }
     const cs=CONFST[d.conf_status]||CONFST.nao_iniciada;
     const prog=(d.conf_prog&&d.conf_prog.feito>0)?`<div class="sub-id">${d.conf_prog.feito}/${d.conf_prog.total} etapas</div>`:'';
     return `<tr style="cursor:pointer" onclick="openConfDetail('${d.order_id}')">
