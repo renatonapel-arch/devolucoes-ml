@@ -609,6 +609,30 @@ def enviar_avaria(payload):
     return {"ok": ok, "mode": "real", "anexos_enviados": enviados, "review": review}
 
 
+def confirmar_revisao_ok(claim_id):
+    """Desfecho 'certo/perfeito': confirma ao ML que a devolução foi revisada e está OK
+    (= botão 'Já revisei'), pra não ficar dias em 'Para sua revisão'.
+    IMPORTANTE: o reembolso ao comprador já é liberado na ENTREGA (refund_at=delivered) —
+    confirmar aqui NÃO mexe no dinheiro, só adianta o encerramento do painel.
+    Modo teste: dry-run. Modo real: PENDENTE validar a ação exata contra um retorno em
+    'Para sua revisão' real (doc do ML é fechada; não havia retorno nesse estado p/ inspecionar)."""
+    claim_id = str(claim_id or "")
+    is_test = (not WRITE_ENABLED) or claim_id.startswith("TESTE") or not claim_id
+    if is_test:
+        try:
+            with open(DRYRUN_LOG, "a", encoding="utf-8") as f:
+                f.write(f"{_now().isoformat()} | REVISAO_OK claim={claim_id} (dry-run)\n")
+        except Exception:
+            pass
+        return {"ok": True, "mode": "teste", "claim_id": claim_id,
+                "aviso": "Modo teste — confirmação NÃO enviada ao ML.",
+                "nota": "O reembolso já libera na entrega; isto só fecharia o painel mais cedo."}
+    # modo REAL — não escrever sem validar a ação no ML (não chutar escrita)
+    return {"ok": False, "mode": "real", "pendente_validacao": True,
+            "nota": "Ação de 'confirmar revisão OK' ainda não validada no ML. Capturar um retorno em "
+                    "'Para sua revisão' ao vivo p/ confirmar o endpoint/ação antes de habilitar a escrita."}
+
+
 # =====================================================================
 # Persistência da CONFERÊNCIA (manual-first) — etapas salvam sozinhas,
 # com quem fez e quando. Status derivado: nao_iniciada / em_andamento /

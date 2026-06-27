@@ -162,6 +162,12 @@ async def avaria(req: Request):
     return JSONResponse(ml.enviar_avaria(payload))
 
 
+@app.post("/api/revisao-ok")
+async def revisao_ok(req: Request):
+    b = await req.json()
+    return JSONResponse(ml.confirmar_revisao_ok(b.get("claim_id")))
+
+
 NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
 
 

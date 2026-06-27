@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v16: remove fase Financeiro (redundante: a NF de devolucao no SIGE ja gera o financeiro) -->
+<!-- v17: desfecho certo/perfeito confirma revisao OK no ML (dry-run no modo teste) -->
 
 <style>
   :root{
@@ -1131,7 +1131,15 @@ async function registrarVolume(n, N){
   if(n>=N){ avancarPasso(resp); }
   else { FICHA.conf=resp; paintFicha(); }   // continua na etapa, mostra n recebidos
 }
-async function salvarAbertura(desf){ if(!requireUser()) return; const r=await postEtapa("abertura", {desfecho:desf}); if(!r||r.__erro)return; avancarPasso(r); }
+async function salvarAbertura(desf){
+  if(!requireUser()) return;
+  const r=await postEtapa("abertura", {desfecho:desf}); if(!r||r.__erro)return;
+  // desfecho certo/perfeito: confirma a revisão no ML ("Já revisei") pra não ficar dias no painel
+  if(desf==="certo" && FICHA.d.claim_id){
+    try{ await fetch("/api/revisao-ok",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({claim_id:FICHA.d.claim_id})}); }catch(e){}
+  }
+  avancarPasso(r);
+}
 async function enviarReclamacao(btn){
   if(!requireUser()) return;
   if(CONF.avaria.length<1){ alert("📸 Tire ao menos 1 foto do dano."); return; }
