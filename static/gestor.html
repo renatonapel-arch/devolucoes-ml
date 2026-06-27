@@ -398,7 +398,7 @@ async function openConfDetail(oid){
   }catch(e){ body.innerHTML='<div class="loading">Erro ao carregar.</div>'; return; }
   const d=DADOS.find(x=>String(x.order_id)===String(oid))||{}, et=reg.etapas||{};
   const ruim=["avariado","trocado","faltando","vazio"].includes((et.abertura||{}).desfecho);
-  const order=["chegada","abertura"]; if(ruim)order.push("reclamacao_ml"); order.push("nf_devolucao","financeiro","compensacao","estoque");
+  const order=["chegada","abertura"]; if(ruim)order.push("reclamacao_ml"); order.push("nf_devolucao","compensacao","estoque");
   const cs=CONFST[reg.status]||CONFST.nao_iniciada;
   const steps=order.map(k=>{ const e=et[k]||{}; const done=k==="reclamacao_ml"?(e.resultado&&e.resultado!=="aguardando"):!!e.feito;
     const det=etDetail(k,e); const who=e.nome?`✓ ${e.nome} · ${e.perfil||""} · ${e.em||""}`:(k==="reclamacao_ml"&&e.enviado?`enviado por ${e.nome||""} · ${e.em||""}`:"a fazer");

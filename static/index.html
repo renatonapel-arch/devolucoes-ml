@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v15: nao-entrega que VOLTOU pro vendedor (returned, date_returned recente) vira CHEGOU — sinal confiavel (ex C-20 voltou hoje) -->
+<!-- v16: remove fase Financeiro (redundante: a NF de devolucao no SIGE ja gera o financeiro) -->
 
 <style>
   :root{
@@ -623,7 +623,7 @@ function stepsList(){
   const ruim=["avariado","trocado","faltando","vazio"].includes(desf);
   const arr=["chegada","abertura"];
   if(ruim) arr.push("reclamacao_ml");
-  arr.push("nf_devolucao","financeiro","compensacao","estoque");
+  arr.push("nf_devolucao","compensacao","estoque");
   return arr;
 }
 function stepDone(key){
@@ -989,9 +989,9 @@ function stepBody(key,d,et){
         <div class="suggest-meta">Motivo <b>SRF2</b> · anexa as fotos</div></div>
       <div class="cta"><button class="cta-step send-ml" onclick="enviarReclamacao(this)">✅ Aprovar e enviar ao ML</button></div>`;
   }
-  if(key==="nf_devolucao"||key==="financeiro"){ const lbl=key==="nf_devolucao"?"Emita a NF de devolução no SIGE.":"Lance o financeiro da devolução no SIGE.";
+  if(key==="nf_devolucao"){
     return `<div class="sige-note">⚠️ Feito na <b>tela do SIGE</b> — o app não escreve no SIGE. Faça lá e confirme aqui.</div>
-      <div class="cs-desc">${lbl}</div>
+      <div class="cs-desc">Emita a NF de devolução no SIGE <small>(o lançamento financeiro sai automático dela).</small></div>
       <div class="cta"><button class="cta-step feito-btn" onclick="salvarSige('${key}')">✔ Feito no SIGE — avançar →</button></div>`; }
   if(key==="compensacao"){ const sm=FICHA.d.status_money;
     const hint = sm==="refunded"?'<b>O ML já reembolsou</b> o comprador.':(sm==="retained"?'O dinheiro está <b>retido</b> no ML.':'');

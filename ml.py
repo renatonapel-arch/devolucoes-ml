@@ -704,7 +704,7 @@ def dbg(msg):
 
 def _req_etapas(reg):
     desf = (reg.get("etapas", {}).get("abertura") or {}).get("desfecho")
-    base = ["chegada", "abertura", "nf_devolucao", "financeiro", "compensacao", "estoque"]
+    base = ["chegada", "abertura", "nf_devolucao", "compensacao", "estoque"]
     if desf in RUINS:
         base.insert(2, "reclamacao_ml")
     return base
