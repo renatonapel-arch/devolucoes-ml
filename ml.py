@@ -233,7 +233,9 @@ def build_item(oid, origem="devolucao"):
                 dev_aberta = (rt.get("date_created") or "")[:10] or None
                 if fase == "delivered":   # chegou no galpão — guarda quando
                     o["_chegou_em"] = (rt.get("last_updated") or rt.get("date_closed") or "")[:10] or None
-                shp = rt["shipments"][0]
+                shps = rt["shipments"]
+                # prefere o envio que vem pro VENDEDOR (seller_address) — é o rótulo que o conferente tem na mão
+                shp = next((s for s in shps if (s.get("destination") or {}).get("name") == "seller_address"), shps[0])
                 d = shp.get("destination") or {}
                 destino = d.get("name")
                 addr = d.get("shipping_address") or {}
@@ -242,6 +244,9 @@ def build_item(oid, origem="devolucao"):
                 local = (city + ("-" + uf if uf else "")) or None
                 sh_id = shp.get("shipment_id")
                 track = shp.get("tracking_number")
+                # TODOS os envios/rastreios da devolução (pode ter 2: seller_address + warehouse) — bipar QUALQUER rótulo acha
+                o["_ret_all_ids"] = [str(s.get("shipment_id")) for s in shps if s.get("shipment_id")] + \
+                                    [str(s.get("tracking_number")) for s in shps if s.get("tracking_number")]
                 # detalhe do claim (tipo/motivo/status)
                 c = g(f"/post-purchase/v1/claims/{cid}") or {}
                 claim_type = c.get("type")
@@ -259,6 +264,10 @@ def build_item(oid, origem="devolucao"):
     pack_id = str((dc.get(str(oid)) or {}).get("pack_id") or oid)
     shipment_id = str(o.get("_ret_shipment") or shipid or "")
     tracking = o.get("_ret_track") or "-"
+    # TODOS os envios/rastreios da devolução (bipar qualquer rótulo acha) + o envio do pedido
+    all_ids = list(o.get("_ret_all_ids") or [])
+    if shipid: all_ids.append(str(shipid))
+    shipment_ids = sorted({i for i in all_ids if i and i not in ("None", "-")})
 
     hist = _buyer_hist(buyer.get("id"), oid)
 
@@ -266,6 +275,7 @@ def build_item(oid, origem="devolucao"):
         "produto": title, "valor": float(valor or 0), "comprador": buyer.get("nickname", ""),
         "data_venda": data_venda, "order_id": str(oid), "pack_id": pack_id,
         "claim_id": claim_id, "shipment_id": shipment_id, "tracking": tracking,
+        "shipment_ids": shipment_ids,
         "fase": _norm_fase(fase), "tipo": tipo,
         "claim_type": claim_type, "claim_status": claim_status, "reason_id": reason_id,
         "status_money": status_money, "destino": destino, "item_id": item_id, "qtd": qtd,
@@ -453,6 +463,9 @@ def buscar(code, force_ml=False):
                 v = str(it.get(f) or "").upper()
                 if v and v == up:
                     return {"found": True, "in_list": True, "by": f, "item": it}
+            for sid in (it.get("shipment_ids") or []):   # todos os envios da devolução
+                if str(sid).upper() == up:
+                    return {"found": True, "in_list": True, "by": "shipment_id", "item": it}
         return {"found": False, "in_list": False, "code": code}
 
     # ---- busca AO VIVO no ML (fora da lista) ----

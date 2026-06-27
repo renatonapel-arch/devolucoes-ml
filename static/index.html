@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v12: traz de volta os CHEGOU (delivered recente) como status Chegou + dias-desde-chegada + KPI no gestor -->
+<!-- v13: busca por TODOS os envios da devolucao (seller_address+warehouse) + msg de nao-achou util -->
 
 <style>
   :root{
@@ -789,11 +789,14 @@ function findByCode(code){
   code = (code||"").trim();
   if(!code) return null;
   const up = code.toUpperCase();
-  // 1) match EXATO em qualquer ID
+  // 1) match EXATO em qualquer ID (inclui TODOS os envios da devolução — seller_address + warehouse)
   for(let i=0;i<DADOS.length;i++){
     for(const f of FIELDS){
       const val = (DADOS[i][f]||"").toString().toUpperCase();
       if(val && val===up) return {i,by:f};
+    }
+    for(const sid of (DADOS[i].shipment_ids||[])){
+      if(String(sid).toUpperCase()===up) return {i,by:"shipment_id"};
     }
   }
   // 2) se o código tem ≥4 chars e parece texto (não só números), aceita match PARCIAL em produto/comprador
@@ -836,7 +839,7 @@ async function doSearch(){
     const j=await r.json();
     if(j.found && j.item){ openItem(j.item, j.by==="ml"?"order_id":j.by); return; }
     h.textContent="Não encontrado";
-    alert("🔎 "+(j.hint||"Código não encontrado na lista nem no ML."));
+    alert("🔎 Não achei pelo código \""+code+"\".\n\nTente assim:\n• Digite o nome do produto (ex: \"mola hb20\", \"filamento\")\n• Ou o nº da venda (2000…)\n• Ou bipe o OUTRO código de barras da etiqueta\n\nAlgumas devoluções (ex: Mercado Full) podem não aparecer aqui — nesse caso confira pela venda no painel do ML.");
   }catch(e){ alert("Erro: "+e); }
   h.textContent=old;
 }
