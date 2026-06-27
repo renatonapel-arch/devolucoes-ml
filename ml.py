@@ -7,8 +7,12 @@ Motor de leitura das devoluções ML voltando pro galpão (Fase 1 — SÓ LEITUR
 NUNCA escreve no ML. Só GET.
 """
 import os, re, json, time, threading
-from datetime import datetime, date
+from datetime import datetime, date, timezone, timedelta
 import requests
+
+_BR = timezone(timedelta(hours=-3))   # horário de Brasília (Brasil não tem mais horário de verão)
+def _now():
+    return datetime.now(_BR)
 
 ENV_PATH = os.path.expanduser(r"~/.claude/.env")
 INDEX_DIR = os.environ.get("DEVOL_INDEX_DIR", r"C:\Users\Renato\Downloads\demo-vendas-ml")
@@ -370,7 +374,7 @@ def _do_build():
         itens = [it for it in itens if it.get("fase") in ACEITA_FASE]
         rank = {"delivered": -1, "shipped": 0, "label_generated": 1, "returning_to_sender": 2, "returning_to_hub": 2}
         itens.sort(key=lambda x: (rank.get(x["fase"], 3), -x["valor"]))
-        out = {"ts": time.time(), "atualizado": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        out = {"ts": time.time(), "atualizado": _now().strftime("%d/%m/%Y %H:%M"),
                "total": len(itens), "itens": itens, "construindo": False}
         try:
             json.dump(out, open(CACHE_FILE, "w", encoding="utf-8"), ensure_ascii=False)
@@ -400,7 +404,7 @@ def build_aguardando(force=False, max_idade_min=30):
     - force=True                 -> idem, mas força o rebuild mesmo com cache fresco
     """
     if os.environ.get("DEVOL_EMPTY") == "1":
-        return _with_test({"ts": time.time(), "atualizado": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        return _with_test({"ts": time.time(), "atualizado": _now().strftime("%d/%m/%Y %H:%M"),
                            "total": 0, "itens": [], "construindo": False})
     cached = _ler_cache()
     idade = (time.time() - cached.get("ts", 0)) / 60 if cached else 1e9
@@ -540,7 +544,7 @@ def enviar_avaria(payload):
     if is_test:
         try:
             with open(DRYRUN_LOG, "a", encoding="utf-8") as f:
-                f.write(f"{datetime.now().isoformat()} | claim={claim_id} | anexos={n} | msg={msg[:120]}\n")
+                f.write(f"{_now().isoformat()} | claim={claim_id} | anexos={n} | msg={msg[:120]}\n")
         except Exception:
             pass
         return {"ok": True, "mode": "teste", "claim_id": claim_id,
@@ -631,7 +635,7 @@ def _all_regs():
 def save_anexos(oid, etapa, tipo, fotos):
     if not fotos:
         return 0
-    em = datetime.now().strftime("%d/%m/%Y %H:%M")
+    em = _now().strftime("%d/%m/%Y %H:%M")
     n = 0
     with _lock:
         for durl in fotos:
@@ -657,7 +661,7 @@ DEBUG_LOG = os.path.join(os.path.dirname(DB_FILE) or ".", "debug_conferente.log"
 def dbg(msg):
     try:
         with open(DEBUG_LOG, "a", encoding="utf-8") as f:
-            f.write(f"{datetime.now().strftime('%d/%m %H:%M:%S')} | {msg}\n")
+            f.write(f"{_now().strftime('%d/%m %H:%M:%S')} | {msg}\n")
     except Exception:
         pass
 
@@ -724,11 +728,11 @@ def save_etapa(oid, etapa, dados, perfil, nome, item=None):
         e["feito"] = dados.get("feito", True) if ("feito" in dados) else True
         e["perfil"] = perfil
         e["nome"] = nome
-        e["em"] = datetime.now().strftime("%d/%m %H:%M")
+        e["em"] = _now().strftime("%d/%m %H:%M")
         reg["etapas"][etapa] = e
         if not reg.get("iniciada_por") and nome:
             reg["iniciada_por"] = f"{nome} · {perfil}"
-        reg["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+        reg["atualizado_em"] = _now().strftime("%d/%m/%Y %H:%M")
         reg["ativo"] = {"nome": nome, "perfil": perfil, "ts": time.time()}
         _put_reg(oid, reg)
         out = dict(reg)
