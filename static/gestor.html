@@ -238,7 +238,7 @@ const HIST = {
 const money = v => "R$ " + Number(v||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
 const dataBR = s => { if(!s) return "—"; const [a,m,d]=s.split("-"); return d+"/"+m+"/"+a; };
 const FASE = {
-  delivered:{t:"📍 Chegou",c:"p-success",r:-1}, shipped:{t:"🚚 A caminho",c:"p-info",r:0},
+  delivered:{t:"📍 Chegou",c:"p-success",r:-1}, chegou:{t:"📍 Chegou (não-entrega)",c:"p-success",r:-2}, shipped:{t:"🚚 A caminho",c:"p-info",r:0},
   label_generated:{t:"🏷️ Só etiqueta",c:"p-warn",r:1},
   returning_to_sender:{t:"↩️ Volta remet.",c:"p-naval",r:2}, returning_to_hub:{t:"↩️ Volta hub",c:"p-naval",r:2}
 };

@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v14: REVERTE delivered=chegou (ML marca delivered no CD dele, nao na Napel; mostrava 42 fantasma). Lista=so a caminho; bipar acha as que chegam -->
+<!-- v15: nao-entrega que VOLTOU pro vendedor (returned, date_returned recente) vira CHEGOU — sinal confiavel (ex C-20 voltou hoje) -->
 
 <style>
   :root{
@@ -476,6 +476,7 @@ let DADOS = [];  // carregado ao vivo de /api/aguardando
 
 const FASE = {
   delivered:{t:"📍 Chegou · conferir",cls:"t-arrived",stripe:"var(--ok)"},
+  chegou:{t:"📍 Chegou (não-entrega) · conferir",cls:"t-arrived",stripe:"var(--ok)"},
   shipped:{t:"🚚 A caminho",cls:"t-ship",stripe:"var(--brand)"},
   label_generated:{t:"🏷️ Só etiqueta",cls:"t-label",stripe:"var(--warn)"},
   returning_to_sender:{t:"↩️ Volta ao remetente",cls:"t-return",stripe:"var(--purple)"},

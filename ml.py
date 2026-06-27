@@ -219,8 +219,12 @@ def build_item(oid, origem="devolucao"):
     # 1) não-entrega (shipment voltando)?
     if shipid:
         sh = g(f"/shipments/{shipid}") or {}
-        if sh.get("substatus") in VOLTA_SUB:
-            tipo, fase = "nao_entrega", sh.get("substatus")
+        sub = sh.get("substatus")
+        if sub in VOLTA_SUB:
+            tipo, fase = "nao_entrega", sub                      # voltando ao remetente (a caminho)
+        elif sub in ("returned", "returned_to_sender"):          # JÁ VOLTOU pro vendedor = chegou no galpão
+            tipo, fase = "nao_entrega", "chegou"
+            o["_chegou_em"] = ((sh.get("status_history") or {}).get("date_returned") or "")[:10] or None
 
     # 2) devolução via claim/mediação
     if tipo != "nao_entrega" and meds:
@@ -336,8 +340,14 @@ def _candidatos():
             cand[str(oid)] = "devolucao"
     # não-entregas: ENVIO que falhou e está VOLTANDO ao remetente (ainda não chegou).
     # shipping.status=not_delivered pega venda antiga voltando agora; mantém só os EM TRÂNSITO
-    # de volta (returning_*), NÃO os que já voltaram (returned/returned_to_hub) nem lost/etc.
+    #  - returning_* = ainda voltando (a caminho)
+    #  - returned*   = JÁ VOLTOU pro vendedor (chegou no galpão) — sinal CONFIÁVEL (tem date_returned).
+    #    Só os recentes (<=7 dias), senão poluiria com histórico de não-entregas antigas.
     NE_A_CAMINHO = {"returning_to_sender", "returning_to_hub"}
+    NE_CHEGOU = {"returned", "returned_to_sender"}
+    JANELA_NE = 7
+    from datetime import timedelta
+    hoje = _today()
     offset = 0
     for _ in range(8):
         r = g(f"/orders/search?seller={seller}&shipping.status=not_delivered&limit=50&offset={offset}&sort=date_desc")
@@ -348,13 +358,19 @@ def _candidatos():
             shp = (e.get("shipping") or {}).get("id")
             if shp:
                 sh = g(f"/shipments/{shp}") or {}
-                if sh.get("substatus") in NE_A_CAMINHO:
+                sub = sh.get("substatus")
+                if sub in NE_A_CAMINHO:
                     cand.setdefault(oid, "nao_entrega")
+                elif sub in NE_CHEGOU:
+                    dr = ((sh.get("status_history") or {}).get("date_returned") or "")[:10]
+                    try:
+                        if dr and (hoje - date.fromisoformat(dr)).days <= JANELA_NE:
+                            cand.setdefault(oid, "nao_entrega")
+                    except Exception:
+                        pass
         offset += 50
         if offset >= total or not results:
             break
-        if len(results) < 50: break
-        offset += 50
     return cand
 
 
@@ -384,10 +400,12 @@ def _do_build():
                     itens.append(it)
             except Exception:
                 continue
-        # só A CAMINHO (shipped/returning_*). 'delivered' NÃO entra (não é "chegou no galpão" — ver _candidatos).
-        ACEITA_FASE = {"shipped", "returning_to_sender", "returning_to_hub"}
+        # a caminho (shipped/returning_*) + CHEGOU (não-entrega que já voltou pro vendedor).
+        # 'delivered' (claim no CD do ML) NÃO entra — não é chegada no galpão.
+        ACEITA_FASE = {"shipped", "returning_to_sender", "returning_to_hub", "chegou"}
         itens = [it for it in itens if it.get("fase") in ACEITA_FASE]
-        rank = {"shipped": 0, "label_generated": 1, "returning_to_sender": 2, "returning_to_hub": 2}
+        # chegou primeiro (conferir já), depois a caminho
+        rank = {"chegou": -2, "shipped": 0, "label_generated": 1, "returning_to_sender": 2, "returning_to_hub": 2}
         itens.sort(key=lambda x: (rank.get(x["fase"], 3), -x["valor"]))
         out = {"ts": time.time(), "atualizado": _now().strftime("%d/%m/%Y %H:%M"),
                "total": len(itens), "itens": itens, "construindo": False}
