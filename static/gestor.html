@@ -247,7 +247,7 @@ function reinc(d){ const c=d.compras||1, v=d.devolucoes||1;
   if(v>1) return {cls:"p-danger",txt:`${v}× devoluções`}; if(c>1) return {cls:"p-success",txt:`${c} compras`};
   return {cls:"p-warn",txt:"1ª compra"}; }
 
-let DADOS=[], filtro="todos", sortK="dias_aberta", sortDir=-1, CONTAGEM={};
+let DADOS=[], filtro="pendentes", sortK="dias_aberta", sortDir=-1, CONTAGEM={};
 const CONFST={nao_iniciada:{t:"⚪ Não iniciada",c:"p-danger"},em_andamento:{t:"🟡 Em andamento",c:"p-warn"},aguardando_ml:{t:"🔵 Aguardando ML",c:"p-info"},concluida:{t:"🟢 Concluída",c:"p-success"}};
 
 async function load(refresh){
@@ -279,11 +279,12 @@ function renderFilters(){
   const c=CONTAGEM;
   const pend=(c.em_andamento||0)+(c.aguardando_ml||0)+(c.nao_iniciada||0);
   const opts=[
-    ["todos","Todas",DADOS.length],
-    ["pendentes","Pendentes",pend],
-    ["em_andamento","🟡 Em andamento",c.em_andamento||0],
+    ["pendentes","📋 A conferir (pendentes)",pend],
+    ["nao_iniciada","🚚 A caminho (previsto)",c.nao_iniciada||0],
+    ["em_andamento","🟡 Em conferência",c.em_andamento||0],
     ["aguardando_ml","🔵 Aguardando ML",c.aguardando_ml||0],
     ["concluida","🟢 Concluídas",c.concluida||0],
+    ["todos","Todas",DADOS.length],
     ["__sep__","",""],
     ["seller_address","🔵 Pro galpão",""],["warehouse","🟢 CD ML",""],["refunded","💸 Reembolsados",""],["mediations","⚖️ Mediação",""]
   ];
