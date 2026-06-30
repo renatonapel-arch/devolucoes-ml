@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v18: REVERTE auto-chegou de nao-entrega (ML returned = hub do ML, nao a doca Napel). Lista=so a caminho; bipar ainda acha as que chegaram -->
+<!-- v19: botao secundario Ja abri direto no ML em reclamacao_ml (registra etapa sem chamar API ML) -->
 
 <style>
   :root{
@@ -987,7 +987,10 @@ function stepBody(key,d,et){
       <div class="suggest"><div class="suggest-h">🤖 Mensagem sugerida <span>rascunho</span></div>
         <textarea class="suggest-txt">${sugerirMensagem(d)}</textarea>
         <div class="suggest-meta">Motivo <b>SRF2</b> · anexa as fotos</div></div>
-      <div class="cta"><button class="cta-step send-ml" onclick="enviarReclamacao(this)">✅ Aprovar e enviar ao ML</button></div>`;
+      <div class="cta">
+        <button class="cta-step send-ml" onclick="enviarReclamacao(this)">✅ Aprovar e enviar ao ML</button>
+        <button class="cta-step" style="background:#eef2f7;color:var(--ink);margin-top:8px;border:1px solid var(--border)" onclick="marcarFeitoNoML('reclamacao_ml','reclamacao aberta direto no painel do ML')">🌐 Já abri direto no Mercado Livre</button>
+      </div>`;
   }
   if(key==="nf_devolucao"){
     return `<div class="sige-note">⚠️ Feito na <b>tela do SIGE</b> — o app não escreve no SIGE. Faça lá e confirme aqui.</div>
@@ -1155,6 +1158,14 @@ async function enviarReclamacao(btn){
   }catch(e){ btn.style.pointerEvents=""; alert("Erro ao enviar: "+e); }
 }
 async function salvarResultadoML(res){ if(!requireUser())return; const r=await postEtapa("reclamacao_ml",{enviado:true,resultado:res}); if(!r||r.__erro)return; avancarPasso(r); }
+// "Já fiz direto no ML" — registra a etapa como feita pelo conferente, sem disparar nada na API do ML
+async function marcarFeitoNoML(etapa, descricao){
+  if(!requireUser()) return;
+  if(!confirm("Confirmar: você já fez isso direto no painel do Mercado Livre?\n\n"+descricao+"\n\nVou registrar como feito (sem enviar nada ao ML).")) return;
+  const r=await postEtapa(etapa, {enviado:true, resultado:"aguardando", origem:"manual_ml", nota:descricao});
+  if(!r||r.__erro) return;
+  avancarPasso(r);
+}
 async function salvarSige(key){ if(!requireUser())return; const r=await postEtapa(key,{}); if(!r||r.__erro)return; avancarPasso(r); }
 async function salvarCompensacao(compensou){ if(!requireUser())return; const r=await postEtapa("compensacao",{compensou:!!compensou}); if(!r||r.__erro)return; avancarPasso(r); }
 async function salvarEstoque(){
