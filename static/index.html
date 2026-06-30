@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v19: botao secundario Ja abri direto no ML em reclamacao_ml (registra etapa sem chamar API ML) -->
+<!-- v20: aviso na abertura quando e nao-entrega (nao tem reclamacao no ML pra responder) -->
 
 <style>
   :root{
@@ -967,13 +967,19 @@ function stepBody(key,d,et){
         ${ja>0&&ja<N?`<button class="cta-step" style="background:var(--warn);margin-top:8px" onclick="voltarLista()">Faltam ${N-ja} — receber o resto depois (parcial)</button>`:""}
       </div>`;
   }
-  if(key==="abertura") return `<div class="cs-desc">Confira se bate com a venda e informe o estado encontrado:</div>
+  if(key==="abertura"){
+    const naoEnt = d.tipo==="nao_entrega";
+    const aviso = naoEnt
+      ? `<div class="sige-note" style="background:#eef2f7;border-color:#cbd5e1;color:var(--ink-600)">ℹ️ <b>Não-entrega</b> — o comprador não recebeu (recusou ou ML não conseguiu entregar). Sem reclamação no ML pra responder — registre só o estado físico aqui.</div>`
+      : "";
+    return aviso + `<div class="cs-desc">Confira se bate com a venda e informe o estado encontrado:</div>
     <div class="desf-grid">
       <button class="desf" onclick="salvarAbertura('certo')">✅ Certo / perfeito</button>
       <button class="desf" onclick="salvarAbertura('avariado')">⚠️ Avariado</button>
       <button class="desf" onclick="salvarAbertura('trocado')">🔄 Trocado / não é o nosso (golpe)</button>
       <button class="desf" onclick="salvarAbertura('faltando')">📉 Faltando peças</button>
       <button class="desf" onclick="salvarAbertura('vazio')">📦 Caixa vazia</button></div>`;
+  }
   if(key==="reclamacao_ml"){ const rc=et.reclamacao_ml||{};
     if(rc.enviado && (!rc.resultado||rc.resultado==="aguardando")) return `<div class="donebadge" style="background:var(--brand-soft);color:var(--brand-d)">🔵 Aguardando resposta do ML · enviado por ${rc.nome||"?"} · ${rc.em||""}</div>
       <div class="cs-desc" style="margin-top:10px">Quando o ML responder, registre o resultado:</div>
