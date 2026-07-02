@@ -301,6 +301,7 @@ tbody tr:hover{background:var(--sky-bg)}
   <div id="tab-ent" style="display:none">
     <div class="card">
       <div class="card-head"><div class="t"><svg class="i"><use href="#i-in"/></svg>Entradas na doca</div><div class="n">pacotes que chegaram fisicamente (bipados na chegada)</div></div>
+      <div style="padding:14px 20px 0"><div class="seg" id="ent-filters"></div></div>
       <div id="entradas-body"><div class="loading">Carregando…</div></div>
     </div>
   </div>
@@ -617,21 +618,41 @@ function showTab(t){
 }
 
 // ===== Entradas na doca (chegada física bipada) =====
+let ENT_ITENS=[], filtroEnt="pendentes";
 async function renderEntradas(){
   const el=document.getElementById("entradas-body");
   let j;
   try{ j=await (await fetch("/api/entradas-visao")).json(); }
   catch(e){ el.innerHTML='<div class="loading" style="color:var(--err-fg)">Erro ao carregar.</div>'; return; }
   const dias=j.dias||[];
-  const paradas=dias.flatMap(d=>d.itens).filter(e=>e.conf_status==="nao_iniciada").length;
+  ENT_ITENS=dias.flatMap(d=>d.itens.map(e=>({...e, _dia:d.dia})));
+  const paradas=ENT_ITENS.filter(e=>e.conf_status==="nao_iniciada").length;
   const badge=document.getElementById("ent-badge");
   if(paradas>0){ badge.style.display="inline-block"; badge.textContent=paradas; } else badge.style.display="none";
-  if(!dias.length){ el.innerHTML='<div class="loading">Nenhuma entrada registrada ainda. As bipadas de chegada da doca aparecem aqui.</div>'; return; }
-  el.innerHTML=dias.map(d=>`
+  renderEntFiltros();
+  renderEntLista();
+}
+function renderEntFiltros(){
+  const pend=ENT_ITENS.filter(e=>e.conf_status!=="concluida").length;
+  const concl=ENT_ITENS.filter(e=>e.conf_status==="concluida").length;
+  const opts=[["pendentes","Em conferência + não iniciados",pend],["concluidos","Concluídos",concl],["todos","Todos",ENT_ITENS.length]];
+  document.getElementById("ent-filters").innerHTML=opts.map(([k,l,n])=>
+    `<button class="${filtroEnt===k?'on':''}" onclick="setFiltroEnt('${k}')">${l} <b>${n}</b></button>`).join("");
+}
+function setFiltroEnt(k){ filtroEnt=k; renderEntFiltros(); renderEntLista(); }
+function renderEntLista(){
+  const el=document.getElementById("entradas-body");
+  const filt=e=>filtroEnt==="todos"?true:filtroEnt==="concluidos"?e.conf_status==="concluida":e.conf_status!=="concluida";
+  const itens=ENT_ITENS.filter(filt);
+  if(!ENT_ITENS.length){ el.innerHTML='<div class="loading">Nenhuma entrada registrada ainda. As bipadas de chegada da doca aparecem aqui.</div>'; return; }
+  if(!itens.length){ el.innerHTML='<div class="loading">Nenhuma entrada neste filtro.</div>'; return; }
+  const dias=[]; const porDia={};
+  itens.forEach(e=>{ if(!porDia[e._dia]){ porDia[e._dia]=[]; dias.push(e._dia); } porDia[e._dia].push(e); });
+  el.innerHTML=dias.map(dia=>{ const its=porDia[dia]; return `
     <div style="padding:12px 20px 6px;font-family:var(--font-d);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border);background:#fbfdfe">
-      ${d.dia} · ${d.total} entrada${d.total>1?"s":""}
+      ${dia} · ${its.length} entrada${its.length>1?"s":""}
     </div>
-    ${d.itens.map(e=>{
+    ${its.map(e=>{
       const fmtH=h=>h<1?Math.round(h*60)+"min":h.toFixed(1).replace(".0","")+"h";
       let st;
       if(e.conf_status==="nao_identificada")
@@ -654,7 +675,8 @@ async function renderEntradas(){
         </div>
         ${st}
       </div>`;
-    }).join("")}`).join("");
+    }).join("")}`;
+  }).join("");
 }
 document.querySelectorAll("#tbl thead th").forEach(th=>th.onclick=()=>sortBy(th.dataset.k));
 load(false);
