@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20: aviso na abertura quando e nao-entrega (nao tem reclamacao no ML pra responder) -->
+<!-- v21: botao Dar Entrada na tela inicial (link p/ /entrada) + volta p/ conferencias na tela de entrada -->
 
 <style>
   :root{
@@ -339,6 +339,14 @@
           </div>
           <div class="tabs" id="tabs"></div>
           <div class="body">
+            <a href="/entrada" style="display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#0A3C5F,#2f7cbf);color:#fff;border-radius:14px;padding:13px 16px;margin-bottom:10px;text-decoration:none;box-shadow:0 8px 20px -10px rgba(10,60,95,.55)">
+              <div style="font-size:22px">📦</div>
+              <div style="flex:1">
+                <b style="font-size:14.5px">Chegou pacote? Dar entrada</b>
+                <small style="display:block;font-size:11.5px;opacity:.85">bipada de 10 segundos — sem conferir agora</small>
+              </div>
+              <div style="font-size:18px">→</div>
+            </a>
             <div class="scanbar" onclick="openScan()">
               <div class="ic">📷</div>
               <div>
