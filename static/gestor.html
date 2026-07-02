@@ -632,16 +632,20 @@ async function renderEntradas(){
       ${d.dia} · ${d.total} entrada${d.total>1?"s":""}
     </div>
     ${d.itens.map(e=>{
+      const fmtH=h=>h<1?Math.round(h*60)+"min":h.toFixed(1).replace(".0","")+"h";
       let st;
       if(e.conf_status==="nao_identificada")
         st=`<span class="pill p-warn">${svg("i-alert")}código não identificado</span>`;
       else if(e.conf_status==="nao_iniciada"){
         const h=e.horas_sem_iniciar||0;
-        st=`<span class="pill ${h>=4?'p-err':'p-warn'}">${svg("i-clock")}sem conferência há ${h<1?Math.round(h*60)+"min":h.toFixed(0)+"h"}</span>`;
+        st=`<span class="pill ${h>=4?'p-err':'p-warn'}">${svg("i-clock")}sem conferência há ${fmtH(h)}</span>`;
       }
-      else if(e.conf_status==="em_andamento") st=`<span class="pill p-warn">em conferência</span>`;
-      else if(e.conf_status==="aguardando_ml") st=`<span class="pill p-sky">aguardando ML</span>`;
-      else st=`<span class="pill p-ok">${svg("i-check")}concluída${e.conf_atualizada?(" · "+e.conf_atualizada.slice(11)):""}</span>`;
+      else if(e.conf_status==="em_andamento" || e.conf_status==="aguardando_ml"){
+        const h=e.horas_em_conferencia||0;
+        const rotulo=e.conf_status==="aguardando_ml"?"aguardando ML":"em conferência";
+        st=`<span class="pill p-warn">${svg("i-clock")}${rotulo} há ${fmtH(h)}</span>`;
+      }
+      else st=`<span class="pill p-ok">${svg("i-check")}concluída em ${fmtH(e.horas_para_concluir||0)}</span>`;
       return `<div class="row-line">
         <span class="pill p-navy mono" style="flex:0 0 auto">${(e.em||"").slice(11)}</span>
         <div style="flex:1;min-width:0">

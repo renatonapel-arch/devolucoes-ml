@@ -904,7 +904,9 @@ def listar_entradas(dia=None):
 
 
 def visao_entradas(max_itens=500):
-    """Visão do gestor: entradas por dia + status da conferência + horas sem iniciar."""
+    """Visão do gestor: entradas por dia + status da conferência + horas sem iniciar/em
+    conferência/até concluir. Início = entrada.ts (chegada real bipada). Fim = conferencias.
+    updated_at (epoch do último save_etapa — quando concluída, é o instante da conclusão)."""
     agora = time.time()
     with _lock:
         rows = _db.execute("SELECT order_id,codigo,produto,comprador,nome,em,ts FROM entradas ORDER BY id DESC LIMIT ?",
@@ -913,18 +915,26 @@ def visao_entradas(max_itens=500):
     for r in rows:
         d = dict(r)
         oid = d.get("order_id")
+        ts_entrada = d.get("ts") or agora
         if oid:
             reg = _get_reg(oid)
             if reg:
                 d["conf_status"] = compute_status(reg)
                 d["conf_prog"] = _progresso(reg)
                 d["conf_atualizada"] = reg.get("atualizado_em")
+                with _lock:
+                    ur = _db.execute("SELECT updated_at FROM conferencias WHERE order_id=?", (str(oid),)).fetchone()
+                ts_fim = (ur["updated_at"] if ur else None) or agora
+                if d["conf_status"] == "concluida":
+                    d["horas_para_concluir"] = round((ts_fim - ts_entrada) / 3600, 1)
+                elif d["conf_status"] in ("em_andamento", "aguardando_ml"):
+                    d["horas_em_conferencia"] = round((agora - ts_entrada) / 3600, 1)
             else:
                 d["conf_status"] = "nao_iniciada"
         else:
             d["conf_status"] = "nao_identificada"
         if d["conf_status"] in ("nao_iniciada", "nao_identificada"):
-            d["horas_sem_iniciar"] = round((agora - (d.get("ts") or agora)) / 3600, 1)
+            d["horas_sem_iniciar"] = round((agora - ts_entrada) / 3600, 1)
         dia = (d.get("em") or "")[:10]
         dias.setdefault(dia, []).append(d)
     return {"dias": [{"dia": k, "total": len(v), "itens": v} for k, v in dias.items()]}
