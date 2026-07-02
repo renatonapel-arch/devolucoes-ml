@@ -628,7 +628,8 @@ def confirmar_revisao_ok(claim_id):
     rid = rt.get("id")
     if not rid:
         return {"ok": False, "mode": "real", "erro": "return_id não encontrado"}
-    r = _post(f"/post-purchase/v1/returns/{rid}/return-review", json_body={})
+    # corpo = LISTA de problemas; lista vazia [] = "chegou como esperado" (validado ao vivo: 201 completed)
+    r = _post(f"/post-purchase/v1/returns/{rid}/return-review", json_body=[])
     ok = not (isinstance(r, dict) and r.get("_err"))
     dbg(f"REVISAO_OK claim={claim_id} return={rid} -> ok={ok} resp={str(r)[:200]}")
     return {"ok": ok, "mode": "real", "return_id": rid, "resp": r}
