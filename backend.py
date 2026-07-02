@@ -180,6 +180,11 @@ def get_entradas(dia: str = None):
     return JSONResponse(ml.listar_entradas(dia))
 
 
+@app.get("/api/entradas-visao")
+def entradas_visao():
+    return JSONResponse(ml.visao_entradas())
+
+
 @app.get("/entrada")
 def entrada_page():
     return FileResponse(os.path.join(APP_DIR, "static", "entrada.html"), headers=NO_CACHE)

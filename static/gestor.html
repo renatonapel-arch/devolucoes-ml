@@ -224,6 +224,7 @@ tbody tr:hover{background:var(--sky-bg)}
   <symbol id="i-warehouse" viewBox="0 0 24 24"><path d="M3 21V9l9-5 9 5v12M9 21v-8h6v8"/></symbol>
   <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
   <symbol id="i-back" viewBox="0 0 24 24"><path d="M9 5H4v5M4 5l7 7-7 7"/></symbol>
+  <symbol id="i-in" viewBox="0 0 24 24"><path d="M3 21V9l9-5 9 5v12M12 21v-8M8 17l4 4 4-4"/></symbol>
 </defs></svg>
 
 <div class="wrap">
@@ -250,6 +251,7 @@ tbody tr:hover{background:var(--sky-bg)}
     <span class="tab on" id="gt-dev" onclick="showTab('dev')"><svg class="i"><use href="#i-list"/></svg>Devoluções</span>
     <span class="tab" id="gt-ana" onclick="showTab('ana')"><svg class="i"><use href="#i-chart"/></svg>Análises</span>
     <span class="tab" id="gt-hist" onclick="showTab('hist')"><svg class="i"><use href="#i-history"/></svg>Histórico</span>
+    <span class="tab" id="gt-ent" onclick="showTab('ent')"><svg class="i"><use href="#i-in"/></svg>Entradas <b id="ent-badge" style="display:none;background:var(--err-bg);color:var(--err-fg);padding:1px 8px;border-radius:999px;font-size:11px"></b></span>
   </div>
 
   <div id="tab-dev">
@@ -293,6 +295,13 @@ tbody tr:hover{background:var(--sky-bg)}
         <div class="card-head"><div class="t"><svg class="i"><use href="#i-box"/></svg>Mais devolvidos</div><div class="n">lote atual</div></div>
         <div id="topprod"></div>
       </div>
+    </div>
+  </div>
+
+  <div id="tab-ent" style="display:none">
+    <div class="card">
+      <div class="card-head"><div class="t"><svg class="i"><use href="#i-in"/></svg>Entradas na doca</div><div class="n">pacotes que chegaram fisicamente (bipados na chegada)</div></div>
+      <div id="entradas-body"><div class="loading">Carregando…</div></div>
     </div>
   </div>
 
@@ -349,7 +358,7 @@ async function load(refresh){
     const r=await fetch("/api/aguardando"+(refresh?"?refresh=1":""));
     const j=await r.json(); DADOS=j.itens||[]; CONTAGEM=j.contagem||{};
     document.getElementById("livestamp").textContent="ao vivo · "+(j.atualizado||"");
-    renderKpis(); renderFilters(); renderChipsSec(); renderTable(); renderAlertas(); renderTopProd(); renderReinc(); renderHist();
+    renderKpis(); renderFilters(); renderChipsSec(); renderTable(); renderAlertas(); renderTopProd(); renderReinc(); renderHist(); renderEntradas();
   }catch(e){
     document.getElementById("kpis").innerHTML=`<div class="loading" style="grid-column:1/-1;color:var(--err-fg)">Erro ao carregar: ${e}</div>`;
   }
@@ -601,10 +610,47 @@ function verFoto(src){
 function closeConfDetail(){ document.getElementById("confmodal").style.display="none"; }
 
 function showTab(t){
-  ["dev","ana","hist"].forEach(x=>{
+  ["dev","ana","hist","ent"].forEach(x=>{
     document.getElementById("tab-"+x).style.display = (x===t)?"block":"none";
     document.getElementById("gt-"+x).classList.toggle("on", x===t);
   });
+}
+
+// ===== Entradas na doca (chegada física bipada) =====
+async function renderEntradas(){
+  const el=document.getElementById("entradas-body");
+  let j;
+  try{ j=await (await fetch("/api/entradas-visao")).json(); }
+  catch(e){ el.innerHTML='<div class="loading" style="color:var(--err-fg)">Erro ao carregar.</div>'; return; }
+  const dias=j.dias||[];
+  const paradas=dias.flatMap(d=>d.itens).filter(e=>e.conf_status==="nao_iniciada").length;
+  const badge=document.getElementById("ent-badge");
+  if(paradas>0){ badge.style.display="inline-block"; badge.textContent=paradas; } else badge.style.display="none";
+  if(!dias.length){ el.innerHTML='<div class="loading">Nenhuma entrada registrada ainda. As bipadas de chegada da doca aparecem aqui.</div>'; return; }
+  el.innerHTML=dias.map(d=>`
+    <div style="padding:12px 20px 6px;font-family:var(--font-d);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border);background:#fbfdfe">
+      ${d.dia} · ${d.total} entrada${d.total>1?"s":""}
+    </div>
+    ${d.itens.map(e=>{
+      let st;
+      if(e.conf_status==="nao_identificada")
+        st=`<span class="pill p-warn">${svg("i-alert")}código não identificado</span>`;
+      else if(e.conf_status==="nao_iniciada"){
+        const h=e.horas_sem_iniciar||0;
+        st=`<span class="pill ${h>=4?'p-err':'p-warn'}">${svg("i-clock")}sem conferência há ${h<1?Math.round(h*60)+"min":h.toFixed(0)+"h"}</span>`;
+      }
+      else if(e.conf_status==="em_andamento") st=`<span class="pill p-warn">em conferência</span>`;
+      else if(e.conf_status==="aguardando_ml") st=`<span class="pill p-sky">aguardando ML</span>`;
+      else st=`<span class="pill p-ok">${svg("i-check")}concluída${e.conf_atualizada?(" · "+e.conf_atualizada.slice(11)):""}</span>`;
+      return `<div class="row-line">
+        <span class="pill p-navy mono" style="flex:0 0 auto">${(e.em||"").slice(11)}</span>
+        <div style="flex:1;min-width:0">
+          <div class="prod-mini">${e.produto||e.codigo}</div>
+          <div class="meta">${e.comprador?e.comprador+" · ":""}bipado por ${e.nome||"?"}</div>
+        </div>
+        ${st}
+      </div>`;
+    }).join("")}`).join("");
 }
 document.querySelectorAll("#tbl thead th").forEach(th=>th.onclick=()=>sortBy(th.dataset.k));
 load(false);

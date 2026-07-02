@@ -881,3 +881,30 @@ def listar_entradas(dia=None):
         rows = _db.execute("SELECT id,order_id,codigo,produto,comprador,nome,em,ts FROM entradas WHERE em LIKE ? ORDER BY id DESC",
                            (dia + "%",)).fetchall()
     return {"dia": dia, "total": len(rows), "itens": [dict(r) for r in rows]}
+
+
+def visao_entradas(max_itens=500):
+    """Visão do gestor: entradas por dia + status da conferência + horas sem iniciar."""
+    agora = time.time()
+    with _lock:
+        rows = _db.execute("SELECT order_id,codigo,produto,comprador,nome,em,ts FROM entradas ORDER BY id DESC LIMIT ?",
+                           (max_itens,)).fetchall()
+    dias = {}
+    for r in rows:
+        d = dict(r)
+        oid = d.get("order_id")
+        if oid:
+            reg = _get_reg(oid)
+            if reg:
+                d["conf_status"] = compute_status(reg)
+                d["conf_prog"] = _progresso(reg)
+                d["conf_atualizada"] = reg.get("atualizado_em")
+            else:
+                d["conf_status"] = "nao_iniciada"
+        else:
+            d["conf_status"] = "nao_identificada"
+        if d["conf_status"] in ("nao_iniciada", "nao_identificada"):
+            d["horas_sem_iniciar"] = round((agora - (d.get("ts") or agora)) / 3600, 1)
+        dia = (d.get("em") or "")[:10]
+        dias.setdefault(dia, []).append(d)
+    return {"dias": [{"dia": k, "total": len(v), "itens": v} for k, v in dias.items()]}
