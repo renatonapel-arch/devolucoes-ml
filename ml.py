@@ -597,27 +597,41 @@ def enviar_avaria(payload):
 
 
 def confirmar_revisao_ok(claim_id):
-    """Desfecho 'certo/perfeito': confirma ao ML que a devolução foi revisada e está OK
-    (= botão 'Já revisei'), pra não ficar dias em 'Para sua revisão'.
-    IMPORTANTE: o reembolso ao comprador já é liberado na ENTREGA (refund_at=delivered) —
-    confirmar aqui NÃO mexe no dinheiro, só adianta o encerramento do painel.
-    Modo teste: dry-run. Modo real: PENDENTE validar a ação exata contra um retorno em
-    'Para sua revisão' real (doc do ML é fechada; não havia retorno nesse estado p/ inspecionar)."""
+    """Desfecho 'certo/perfeito': confirma ao ML que a devolução chegou como esperado
+    (= botão 'Já revisei' → ação return_review_ok), pra não ficar dias em 'Para sua revisão'.
+    Endpoint oficial: POST /post-purchase/v1/returns/{RETURN_ID}/return-review com corpo {}.
+    Não mexe no dinheiro (reembolso já sai na entrega/envio). Gate próprio: DEVOL_REVIEW_OK=1
+    liga SÓ esta escrita (avaria continua atrás de DEVOL_WRITE)."""
     claim_id = str(claim_id or "")
-    is_test = (not WRITE_ENABLED) or claim_id.startswith("TESTE") or not claim_id
-    if is_test:
+    write = WRITE_ENABLED or os.environ.get("DEVOL_REVIEW_OK") == "1"
+    if (not write) or claim_id.startswith("TESTE") or not claim_id:
         try:
             with open(DRYRUN_LOG, "a", encoding="utf-8") as f:
                 f.write(f"{_now().isoformat()} | REVISAO_OK claim={claim_id} (dry-run)\n")
         except Exception:
             pass
         return {"ok": True, "mode": "teste", "claim_id": claim_id,
-                "aviso": "Modo teste — confirmação NÃO enviada ao ML.",
-                "nota": "O reembolso já libera na entrega; isto só fecharia o painel mais cedo."}
-    # modo REAL — não escrever sem validar a ação no ML (não chutar escrita)
-    return {"ok": False, "mode": "real", "pendente_validacao": True,
-            "nota": "Ação de 'confirmar revisão OK' ainda não validada no ML. Capturar um retorno em "
-                    "'Para sua revisão' ao vivo p/ confirmar o endpoint/ação antes de habilitar a escrita."}
+                "aviso": "Modo teste — confirmação NÃO enviada ao ML."}
+    # ---- modo REAL ----
+    # 1) valida que a ação está disponível pro seller (não chutar escrita fora de hora)
+    c = g(f"/post-purchase/v1/claims/{claim_id}") or {}
+    acts = []
+    for p in (c.get("players") or []):
+        if p.get("type") == "seller":
+            acts = [a.get("action") for a in (p.get("available_actions") or [])]
+    if "return_review_ok" not in acts:
+        dbg(f"REVISAO_OK claim={claim_id} SKIP (acao indisponivel; acts={acts})")
+        return {"ok": False, "mode": "real", "skip": True,
+                "nota": f"ML não oferece return_review_ok agora (ações: {acts}). Nada enviado."}
+    # 2) resolve o RETURN_ID e confirma
+    rt = g(f"/post-purchase/v2/claims/{claim_id}/returns") or {}
+    rid = rt.get("id")
+    if not rid:
+        return {"ok": False, "mode": "real", "erro": "return_id não encontrado"}
+    r = _post(f"/post-purchase/v1/returns/{rid}/return-review", json_body={})
+    ok = not (isinstance(r, dict) and r.get("_err"))
+    dbg(f"REVISAO_OK claim={claim_id} return={rid} -> ok={ok} resp={str(r)[:200]}")
+    return {"ok": ok, "mode": "real", "return_id": rid, "resp": r}
 
 
 # =====================================================================
