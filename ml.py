@@ -638,7 +638,11 @@ _db.row_factory = sqlite3.Row
 _db.execute("CREATE TABLE IF NOT EXISTS conferencias (order_id TEXT PRIMARY KEY, reg TEXT, updated_at REAL)")
 _db.execute("CREATE TABLE IF NOT EXISTS anexos (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id TEXT, etapa TEXT, tipo TEXT, data TEXT, criado_em TEXT)")
 _db.execute("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)")
+# entradas = "deu entrada na doca" (fase 1). Tabela SEPARADA das conferências de propósito:
+# não interage com etapas/compute_status — impossível mudar o comportamento atual.
+_db.execute("CREATE TABLE IF NOT EXISTS entradas (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id TEXT, codigo TEXT, produto TEXT, comprador TEXT, nome TEXT, em TEXT, ts REAL)")
 _db.execute("CREATE INDEX IF NOT EXISTS ix_anexos_oid ON anexos(order_id)")
+_db.execute("CREATE INDEX IF NOT EXISTS ix_entradas_oid ON entradas(order_id)")
 _db.commit()
 
 
@@ -837,3 +841,43 @@ def lista():
             "construindo": bool(base.get("construindo")),
             "contagem": {k: cont.get(k, 0) for k in ["nao_iniciada", "em_andamento", "aguardando_ml", "concluida"]},
             "modo": mode()["mode"]}
+
+
+# =====================================================================
+# ENTRADA NA DOCA (fase 1) — bipada rápida de "deu entrada", sem conferir.
+# Cria o carimbo REAL de chegada física. Não toca em conferências/etapas.
+# =====================================================================
+def registrar_entrada(code, nome):
+    code = (code or "").strip()
+    if not code:
+        return {"ok": False, "erro": "código vazio"}
+    # identifica a devolução (lista primeiro, ML depois — mesma busca já testada)
+    r = buscar(code)
+    if not r.get("found"):
+        r = buscar(code, force_ml=True)
+    it = r.get("item") or {}
+    oid = it.get("order_id")
+    with _lock:
+        if oid:
+            ja = _db.execute("SELECT em, nome FROM entradas WHERE order_id=? ORDER BY id DESC LIMIT 1",
+                             (str(oid),)).fetchone()
+            if ja:
+                return {"ok": True, "ja_registrada": True, "em": ja["em"], "por": ja["nome"],
+                        "produto": it.get("produto"), "comprador": it.get("comprador"), "order_id": str(oid)}
+        em = _now().strftime("%d/%m/%Y %H:%M")
+        _db.execute("INSERT INTO entradas(order_id,codigo,produto,comprador,nome,em,ts) VALUES(?,?,?,?,?,?,?)",
+                    (str(oid) if oid else None, code, it.get("produto") or "(não identificado)",
+                     it.get("comprador"), nome, em, time.time()))
+        _db.commit()
+    dbg(f"ENTRADA code={code} oid={oid} nome={nome}")
+    return {"ok": True, "order_id": str(oid) if oid else None, "identificado": bool(oid),
+            "produto": it.get("produto") or "(não identificado)", "comprador": it.get("comprador"), "em": em}
+
+
+def listar_entradas(dia=None):
+    """Entradas de um dia (default hoje, dd/mm/aaaa)."""
+    dia = dia or _now().strftime("%d/%m/%Y")
+    with _lock:
+        rows = _db.execute("SELECT id,order_id,codigo,produto,comprador,nome,em,ts FROM entradas WHERE em LIKE ? ORDER BY id DESC",
+                           (dia + "%",)).fetchall()
+    return {"dia": dia, "total": len(rows), "itens": [dict(r) for r in rows]}

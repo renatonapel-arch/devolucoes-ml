@@ -168,6 +168,23 @@ async def revisao_ok(req: Request):
     return JSONResponse(ml.confirmar_revisao_ok(b.get("claim_id")))
 
 
+# ===== ENTRADA NA DOCA (fase 1 — aditivo, não toca no fluxo de conferência) =====
+@app.post("/api/entrada")
+async def post_entrada(req: Request):
+    b = await req.json()
+    return JSONResponse(ml.registrar_entrada(b.get("code"), b.get("nome", "?")))
+
+
+@app.get("/api/entradas")
+def get_entradas(dia: str = None):
+    return JSONResponse(ml.listar_entradas(dia))
+
+
+@app.get("/entrada")
+def entrada_page():
+    return FileResponse(os.path.join(APP_DIR, "static", "entrada.html"), headers=NO_CACHE)
+
+
 NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
 
 

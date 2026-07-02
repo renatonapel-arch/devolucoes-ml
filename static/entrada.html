@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Entrada de pacotes · Devoluções ML · Napel</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<!-- entrada v1: pagina SEPARADA do conferente/gestor — bipada rapida de "deu entrada" na doca -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0A3C5F; --navy-900:#082E49; --sky:#74A9D7; --sky-700:#2f7cbf; --sky-bg:#EAF3FB;
+  --ink:#0c2433; --muted:#62798c; --faint:#93a7b6;
+  --bg:#F4F8FB; --border:#E8EFF4; --border-strong:#D6E4EE;
+  --ok:#10B981; --ok-bg:#ECFDF5; --ok-fg:#047857;
+  --warn:#F59E0B; --warn-bg:#FEF6E7; --warn-fg:#9a6400;
+  --err:#EF4444; --err-bg:#FEF2F2; --err-fg:#c1352f;
+  --r:16px; --shadow:0 1px 2px rgba(8,46,73,.04),0 8px 24px -14px rgba(8,46,73,.22);
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+svg.i{width:1em;height:1em;display:inline-block;vertical-align:-.14em;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.wrap{max-width:560px;margin:0 auto;padding:18px 16px 60px}
+.head{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.mark{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--navy),var(--sky-700));display:grid;place-items:center;color:#fff;flex:0 0 auto}
+h1{font-family:'Archivo',sans-serif;font-size:19px;font-weight:800;color:var(--navy-900);letter-spacing:-.02em;line-height:1.2}
+.sub{font-size:12.5px;color:var(--muted)}
+.who{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.who input{flex:1;font-family:inherit;font-size:14px;background:#fff;border:1.5px solid var(--border);border-radius:11px;padding:11px 13px;transition:.18s var(--ease)}
+.who input:focus{outline:none;border-color:var(--sky);box-shadow:0 0 0 4px var(--sky-bg)}
+.bigbtn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;background:var(--navy);color:#fff;border:0;border-radius:14px;padding:20px;font-family:'Archivo',sans-serif;font-size:17px;font-weight:800;letter-spacing:-.01em;cursor:pointer;box-shadow:0 10px 28px -10px rgba(10,60,95,.6);transition:.2s var(--ease);margin-bottom:12px}
+.bigbtn:active{transform:scale(.98)}
+.bigbtn svg.i{width:22px;height:22px}
+.manual{display:flex;gap:8px;margin-bottom:20px}
+.manual input{flex:1;font-family:'JetBrains Mono',monospace;font-size:14px;background:#fff;border:1.5px solid var(--border);border-radius:11px;padding:12px 13px}
+.manual input:focus{outline:none;border-color:var(--sky);box-shadow:0 0 0 4px var(--sky-bg)}
+.manual button{border:0;background:var(--sky-700);color:#fff;border-radius:11px;padding:12px 18px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit}
+.fb{border-radius:var(--r);padding:16px;margin-bottom:20px;display:none;animation:pop .3s var(--ease)}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.fb.ok{display:block;background:var(--ok-bg);border:1px solid #b7ecd5}
+.fb.warn{display:block;background:var(--warn-bg);border:1px solid #f5dfae}
+.fb.err{display:block;background:var(--err-bg);border:1px solid #f5c6c2}
+.fb .t{font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px}
+.fb.ok .t{color:var(--ok-fg)} .fb.warn .t{color:var(--warn-fg)} .fb.err .t{color:var(--err-fg)}
+.fb .d{font-size:13px;color:var(--ink);margin-top:5px}
+.fb .m{font-size:11.5px;color:var(--muted);margin-top:3px}
+.sec{font-family:'Archivo',sans-serif;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:0 0 10px}
+.card{background:#fff;border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.item{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--border)}
+.item:last-child{border:0}
+.item .hora{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--navy);background:var(--sky-bg);padding:4px 9px;border-radius:7px;white-space:nowrap}
+.item .p{flex:1;min-width:0}
+.item .p .t{font-size:13.5px;font-weight:600;color:var(--navy-900);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .p .m{font-size:11.5px;color:var(--muted)}
+.vazio{padding:26px;text-align:center;color:var(--faint);font-size:13.5px}
+.spin{display:inline-block;width:16px;height:16px;border:2.5px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-in" viewBox="0 0 24 24"><path d="M3 21V9l9-5 9 5v12M12 21v-8M8 17l4 4 4-4"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v12H4z"/><circle cx="12" cy="13" r="3.4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+</defs></svg>
+
+<div class="wrap">
+  <div class="head">
+    <div class="mark"><svg class="i" style="width:21px;height:21px"><use href="#i-in"/></svg></div>
+    <div>
+      <h1>Entrada de pacotes</h1>
+      <div class="sub">Doca · bipe cada devolução que chegar (sem conferir)</div>
+    </div>
+  </div>
+
+  <div class="who">
+    <input id="nome" placeholder="Seu nome" autocomplete="off">
+  </div>
+
+  <label class="bigbtn" id="bigbtn">
+    <input type="file" accept="image/*" capture="environment" hidden onchange="fotoEntrada(this)">
+    <svg class="i"><use href="#i-cam"/></svg><span id="bigbtn-txt">Tirar foto do código</span>
+  </label>
+
+  <div class="manual">
+    <input id="code" placeholder="ou digite o código / nº da venda" autocomplete="off">
+    <button onclick="registrar(document.getElementById('code').value)">Entrar</button>
+  </div>
+
+  <div class="fb" id="fb"></div>
+
+  <div class="sec">Deram entrada hoje <span id="count"></span></div>
+  <div class="card" id="lista"><div class="vazio">Nenhuma entrada registrada hoje ainda.</div></div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+$("nome").value = localStorage.getItem("doca_nome") || (JSON.parse(localStorage.getItem("conf_user")||"null")||{}).nome || "";
+$("nome").onchange = ()=>localStorage.setItem("doca_nome", $("nome").value.trim());
+
+function fb(cls, titulo, det, meta){
+  const el=$("fb");
+  el.className="fb "+cls;
+  el.innerHTML=`<div class="t"><svg class="i"><use href="#${cls==='ok'?'i-check':(cls==='warn'?'i-clock':'i-alert')}"/></svg>${titulo}</div>`
+    +(det?`<div class="d">${det}</div>`:"")+(meta?`<div class="m">${meta}</div>`:"");
+  try{ navigator.vibrate && navigator.vibrate(cls==="ok"?40:[60,60,60]); }catch(e){}
+}
+
+async function comprimir(file){
+  const MAX=1600, Q=.9;
+  const bmp=await createImageBitmap(file);
+  let w=bmp.width,h=bmp.height;
+  if(w>MAX||h>MAX){ const s=MAX/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+  const c=document.createElement("canvas"); c.width=w; c.height=h;
+  c.getContext("2d").drawImage(bmp,0,0,w,h); if(bmp.close) bmp.close();
+  return c.toDataURL("image/jpeg",Q);
+}
+
+async function fotoEntrada(input){
+  const file=input.files&&input.files[0]; if(!file) return;
+  input.value="";
+  $("bigbtn-txt").innerHTML='<span class="spin"></span> Lendo o código…';
+  try{
+    const durl=await comprimir(file);
+    const r=await fetch("/api/decode-barcode",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({foto:durl})});
+    const j=await r.json();
+    if(j.ok && j.codes && j.codes.length){ await registrar(j.codes[0]); }
+    else fb("err","Não consegui ler o código","Aproxime, foque no código de barras e tente de novo. Ou digite o código abaixo.");
+  }catch(e){ fb("err","Erro ao ler a foto", String(e)); }
+  $("bigbtn-txt").textContent="Tirar foto do código";
+}
+
+async function registrar(code){
+  code=(code||"").trim(); if(!code) return;
+  const nome=$("nome").value.trim();
+  if(!nome){ fb("err","Digite seu nome primeiro","Preencha o campo do nome no topo."); $("nome").focus(); return; }
+  fb("warn","Registrando…", "código "+code);
+  try{
+    const r=await fetch("/api/entrada",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code,nome})});
+    const j=await r.json();
+    if(!j.ok){ fb("err","Não deu",j.erro||"tente de novo"); return; }
+    if(j.ja_registrada){
+      fb("warn","Este pacote JÁ deu entrada", j.produto||code, "registrado por "+(j.por||"?")+" em "+(j.em||""));
+    } else if(j.identificado===false){
+      fb("warn","Entrada registrada — devolução não identificada",
+         "Código "+code+" gravado, mas não achei a venda no ML. Confira o código.",
+         j.em);
+    } else {
+      fb("ok","Deu entrada!", j.produto + (j.comprador?(" · "+j.comprador):""), j.em);
+    }
+    $("code").value="";
+    carregarLista();
+  }catch(e){ fb("err","Falha de rede","Verifique a internet e tente de novo. ("+e+")"); }
+}
+
+async function carregarLista(){
+  try{
+    const j=await (await fetch("/api/entradas")).json();
+    $("count").textContent = j.total ? "("+j.total+")" : "";
+    if(!j.total){ $("lista").innerHTML='<div class="vazio">Nenhuma entrada registrada hoje ainda.</div>'; return; }
+    $("lista").innerHTML=j.itens.map(e=>`
+      <div class="item">
+        <span class="hora">${(e.em||"").slice(11)}</span>
+        <div class="p">
+          <div class="t">${e.produto||e.codigo}</div>
+          <div class="m">${e.comprador?e.comprador+" · ":""}por ${e.nome||"?"}</div>
+        </div>
+      </div>`).join("");
+  }catch(e){}
+}
+carregarLista();
+setInterval(carregarLista, 30000);
+</script>
+</body>
+</html>
