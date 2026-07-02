@@ -857,6 +857,11 @@ def registrar_entrada(code, nome):
         r = buscar(code, force_ml=True)
     it = r.get("item") or {}
     oid = it.get("order_id")
+    if not oid:
+        # falha de bipagem não é chegada — não grava (Renato 2026-07-02)
+        dbg(f"ENTRADA nao identificada (nao gravada) code={code} nome={nome}")
+        return {"ok": False, "nao_identificado": True,
+                "erro": "Não achei essa devolução. Tente outra foto do código ou digite o nº da venda (2000…)."}
     with _lock:
         if oid:
             ja = _db.execute("SELECT em, nome FROM entradas WHERE order_id=? ORDER BY id DESC LIMIT 1",

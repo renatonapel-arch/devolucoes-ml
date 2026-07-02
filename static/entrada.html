@@ -149,13 +149,12 @@ async function registrar(code){
   try{
     const r=await fetch("/api/entrada",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code,nome})});
     const j=await r.json();
-    if(!j.ok){ fb("err","Não deu",j.erro||"tente de novo"); return; }
+    if(!j.ok){
+      fb("err", j.nao_identificado?"Não achei essa devolução":"Não deu", j.erro||"tente de novo");
+      return;
+    }
     if(j.ja_registrada){
       fb("warn","Este pacote JÁ deu entrada", j.produto||code, "registrado por "+(j.por||"?")+" em "+(j.em||""));
-    } else if(j.identificado===false){
-      fb("warn","Entrada registrada — devolução não identificada",
-         "Código "+code+" gravado, mas não achei a venda no ML. Confira o código.",
-         j.em);
     } else {
       fb("ok","Deu entrada!", j.produto + (j.comprador?(" · "+j.comprador):""), j.em);
     }
