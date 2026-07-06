@@ -555,32 +555,43 @@ def _post(path, files=None, json_body=None):
 DRYRUN_LOG = os.path.join(APP_DIR, "avaria_dryrun.log")
 
 
+MOTIVOS_SRF = {
+    "SRF2": "produto chegou avariado", "SRF3": "devolução incompleta",
+    "SRF4": "produto devolvido é diferente do enviado", "SRF5": "produto não está no pacote",
+}
+
+
 def enviar_avaria(payload):
-    """Envia reclamação de avaria (SRF2 — produto chegou avariado). Em modo teste (default)
-    faz DRY-RUN. Em modo real (DEVOL_AVARIA_OK=1), fluxo validado ao vivo em 2026-07-06
-    (venda 2000017088170988, claim 5535822835 — resultado: seller_status='claimed',
-    reason='SRF2', claim foi p/ stage='dispute'):
+    """Envia reclamação de devolução com problema (SRF2/3/4/5, conforme o desfecho marcado
+    na etapa 'abertura'). Em modo teste (default) faz DRY-RUN. Em modo real (DEVOL_AVARIA_OK=1),
+    fluxo validado ao vivo em 2026-07-06 (venda 2000017088170988, claim 5535822835, motivo
+    SRF2 — resultado: seller_status='claimed', claim foi p/ stage='dispute'):
       1) GET /post-purchase/v1/returns/reasons?flow=seller_return_failed&claim_id={cid} — confere reason
       2) POST /post-purchase/v1/claims/{cid}/returns/attachments (multipart 'file') por foto -> file_name
       3) POST /post-purchase/v1/returns/{return_id}/return-review
-         corpo = LISTA: [{"reason":"SRF2","message":msg,"attachments":[file_names]}]
+         corpo = LISTA: [{"reason":MOTIVO,"message":msg,"attachments":[file_names]}]
     (endpoint antigo /claims/{id}/returns/review e /claims/{id}/attachments NÃO EXISTEM —
-    eram chute de antes de validar; corrigido aqui)."""
+    eram chute de antes de validar; corrigido aqui). MOTIVO vem do front (mapeado do desfecho
+    avariado/trocado/faltando/vazio); só SRF2 foi validado ao vivo até agora — SRF3/4/5 usam
+    o mesmo endpoint e formato, então a mesma lógica se aplica, mas ainda sem teste real."""
     import base64
     claim_id = str(payload.get("claim_id") or "")
     msg = (payload.get("mensagem") or "").strip()
     fotos = payload.get("fotos") or []
+    motivo = payload.get("motivo") or "SRF2"
+    if motivo not in MOTIVOS_SRF:
+        motivo = "SRF2"
     n = len(fotos)
     write = os.environ.get("DEVOL_AVARIA_OK") == "1"
     is_test = (not write) or claim_id.startswith("TESTE") or not claim_id
     if is_test:
         try:
             with open(DRYRUN_LOG, "a", encoding="utf-8") as f:
-                f.write(f"{_now().isoformat()} | claim={claim_id} | anexos={n} | msg={msg[:120]}\n")
+                f.write(f"{_now().isoformat()} | claim={claim_id} | motivo={motivo} | anexos={n} | msg={msg[:120]}\n")
         except Exception:
             pass
         return {"ok": True, "mode": "teste", "claim_id": claim_id,
-                "resumo": {"motivo": "SRF2 (produto chegou avariado)", "anexos": n, "mensagem": msg},
+                "resumo": {"motivo": f"{motivo} ({MOTIVOS_SRF[motivo]})", "anexos": n, "mensagem": msg},
                 "aviso": "Modo teste — NADA foi enviado ao Mercado Livre."}
     # ---- modo REAL (gated por DEVOL_AVARIA_OK) ----
     c = g(f"/post-purchase/v1/claims/{claim_id}") or {}
@@ -610,11 +621,11 @@ def enviar_avaria(payload):
         else:
             dbg(f"AVARIA claim={claim_id} upload_anexo FAIL resp={str(r)[:200]}")
             return {"ok": False, "mode": "real", "etapa": "upload_anexo", "erro": r}
-    body = [{"reason": "SRF2", "message": msg, "attachments": enviados}]
+    body = [{"reason": motivo, "message": msg, "attachments": enviados}]
     review = _post(f"/post-purchase/v1/returns/{return_id}/return-review", json_body=body)
     ok = not (isinstance(review, dict) and review.get("_err"))
-    dbg(f"AVARIA claim={claim_id} return={return_id} anexos={len(enviados)} -> ok={ok} resp={str(review)[:200]}")
-    return {"ok": ok, "mode": "real", "return_id": return_id, "anexos_enviados": enviados, "resp": review}
+    dbg(f"AVARIA claim={claim_id} motivo={motivo} return={return_id} anexos={len(enviados)} -> ok={ok} resp={str(review)[:200]}")
+    return {"ok": ok, "mode": "real", "motivo": motivo, "return_id": return_id, "anexos_enviados": enviados, "resp": review}
 
 
 def confirmar_revisao_ok(claim_id):

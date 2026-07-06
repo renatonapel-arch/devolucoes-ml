@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v21: botao Dar Entrada na tela inicial (link p/ /entrada) + volta p/ conferencias na tela de entrada -->
+<!-- v22: botao Dar Entrada na tela inicial (link p/ /entrada) + volta p/ conferencias na tela de entrada -->
 
 <style>
   :root{
@@ -1000,7 +1000,7 @@ function stepBody(key,d,et){
         <label class="pslot dmg vid"><input type="file" accept="video/*" capture="environment" hidden onchange="snap(this,'avaria')"><span>🎥</span>Vídeo</label></div>
       <div class="suggest"><div class="suggest-h">🤖 Mensagem sugerida <span>rascunho</span></div>
         <textarea class="suggest-txt">${sugerirMensagem(d)}</textarea>
-        <div class="suggest-meta">Motivo <b>SRF2</b> · anexa as fotos</div></div>
+        <div class="suggest-meta">Motivo <b>${motivoSRF((et.abertura||{}).desfecho).code}</b> · ${motivoSRF((et.abertura||{}).desfecho).label} · anexa as fotos</div></div>
       <div class="cta">
         <button class="cta-step send-ml" onclick="enviarReclamacao(this)">✅ Aprovar e enviar ao ML</button>
         <button class="cta-step" style="background:#eef2f7;color:var(--ink);margin-top:8px;border:1px solid var(--border)" onclick="marcarFeitoNoML('reclamacao_ml','reclamacao aberta direto no painel do ML')">🌐 Já abri direto no Mercado Livre</button>
@@ -1157,17 +1157,29 @@ async function salvarAbertura(desf){
   }
   avancarPasso(r);
 }
+// mapeia o desfecho da etapa "abertura" pro motivo real do ML (SRF2-7) — cada
+// botão do passo anterior (avariado/trocado/faltando/vazio) tem um motivo diferente.
+function motivoSRF(desfecho){
+  return {
+    avariado: {code:"SRF2", label:"produto chegou avariado"},
+    trocado:  {code:"SRF4", label:"produto devolvido é diferente do enviado"},
+    faltando: {code:"SRF3", label:"devolução incompleta"},
+    vazio:    {code:"SRF5", label:"produto não está no pacote"},
+  }[desfecho] || {code:"SRF2", label:"produto chegou avariado"};
+}
 async function enviarReclamacao(btn){
   if(!requireUser()) return;
   if(CONF.avaria.length<1){ alert("📸 Tire ao menos 1 foto do dano."); return; }
   const msg=(document.querySelector("#view-ficha .suggest-txt")||{}).value||"";
+  const desfecho=(((FICHA.conf||{}).etapas||{}).abertura||{}).desfecho;
+  const motivo=motivoSRF(desfecho).code;
   btn.textContent="enviando…"; btn.style.pointerEvents="none";
   try{
-    const r=await fetch("/api/avaria",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({claim_id:FICHA.d.claim_id, mensagem:msg, fotos:CONF.avaria})});
+    const r=await fetch("/api/avaria",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({claim_id:FICHA.d.claim_id, mensagem:msg, fotos:CONF.avaria, motivo})});
     const j=await r.json();
     const r2=await postEtapa("reclamacao_ml", {enviado:true, resultado:"aguardando", anexos:CONF.avaria, anexo_tipo:"avaria", modo:j.mode});
     if(!r2||r2.__erro){ btn.style.pointerEvents=""; return; }
-    alert(j.mode==="teste" ? ("🧪 MODO TESTE — nada foi ao ML.\nReclamação registrada (SRF2, "+CONF.avaria.length+" foto(s)).\nO card foi para \"Aguardando ML\".") : ("✅ Enviado ao ML (modo real). Anexos: "+(j.anexos_enviados||[]).length));
+    alert(j.mode==="teste" ? ("🧪 MODO TESTE — nada foi ao ML.\nReclamação registrada ("+motivo+", "+CONF.avaria.length+" foto(s)).\nO card foi para \"Aguardando ML\".") : ("✅ Enviado ao ML (modo real, "+motivo+"). Anexos: "+(j.anexos_enviados||[]).length));
     CONF.avaria=[]; avancarPasso(r2);
   }catch(e){ btn.style.pointerEvents=""; alert("Erro ao enviar: "+e); }
 }
