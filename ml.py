@@ -556,14 +556,23 @@ DRYRUN_LOG = os.path.join(APP_DIR, "avaria_dryrun.log")
 
 
 def enviar_avaria(payload):
-    """Envia reclamação de avaria. Em modo teste (default) faz DRY-RUN: registra o que
-    SERIA enviado e não toca no ML. Em modo real (DEVOL_WRITE=1) sobe anexos + abre revisão SRF2."""
+    """Envia reclamação de avaria (SRF2 — produto chegou avariado). Em modo teste (default)
+    faz DRY-RUN. Em modo real (DEVOL_AVARIA_OK=1), fluxo validado ao vivo em 2026-07-06
+    (venda 2000017088170988, claim 5535822835 — resultado: seller_status='claimed',
+    reason='SRF2', claim foi p/ stage='dispute'):
+      1) GET /post-purchase/v1/returns/reasons?flow=seller_return_failed&claim_id={cid} — confere reason
+      2) POST /post-purchase/v1/claims/{cid}/returns/attachments (multipart 'file') por foto -> file_name
+      3) POST /post-purchase/v1/returns/{return_id}/return-review
+         corpo = LISTA: [{"reason":"SRF2","message":msg,"attachments":[file_names]}]
+    (endpoint antigo /claims/{id}/returns/review e /claims/{id}/attachments NÃO EXISTEM —
+    eram chute de antes de validar; corrigido aqui)."""
     import base64
     claim_id = str(payload.get("claim_id") or "")
     msg = (payload.get("mensagem") or "").strip()
     fotos = payload.get("fotos") or []
     n = len(fotos)
-    is_test = (not WRITE_ENABLED) or claim_id.startswith("TESTE") or not claim_id
+    write = os.environ.get("DEVOL_AVARIA_OK") == "1"
+    is_test = (not write) or claim_id.startswith("TESTE") or not claim_id
     if is_test:
         try:
             with open(DRYRUN_LOG, "a", encoding="utf-8") as f:
@@ -571,12 +580,22 @@ def enviar_avaria(payload):
         except Exception:
             pass
         return {"ok": True, "mode": "teste", "claim_id": claim_id,
-                "resumo": {"motivo": "SRF2 (produto chegou avariado)", "anexos": n,
-                           "endpoint_anexo": f"POST /post-purchase/v1/claims/{claim_id}/attachments",
-                           "endpoint_revisao": f"POST /post-purchase/v1/claims/{claim_id}/returns/review",
-                           "mensagem": msg},
+                "resumo": {"motivo": "SRF2 (produto chegou avariado)", "anexos": n, "mensagem": msg},
                 "aviso": "Modo teste — NADA foi enviado ao Mercado Livre."}
-    # ---- modo REAL (gated) ----
+    # ---- modo REAL (gated por DEVOL_AVARIA_OK) ----
+    c = g(f"/post-purchase/v1/claims/{claim_id}") or {}
+    acts = []
+    for p in (c.get("players") or []):
+        if p.get("type") == "seller":
+            acts = [a.get("action") for a in (p.get("available_actions") or [])]
+    if "return_review_fail" not in acts:
+        dbg(f"AVARIA claim={claim_id} SKIP (acao indisponivel; acts={acts})")
+        return {"ok": False, "mode": "real", "skip": True,
+                "nota": f"ML não oferece return_review_fail agora (ações: {acts}). Nada enviado."}
+    rt = g(f"/post-purchase/v2/claims/{claim_id}/returns") or {}
+    return_id = rt.get("id")
+    if not return_id:
+        return {"ok": False, "mode": "real", "erro": "return_id não encontrado"}
     enviados = []
     for i, durl in enumerate(fotos):
         try:
@@ -584,16 +603,18 @@ def enviar_avaria(payload):
             b = base64.b64decode(raw)
         except Exception:
             continue
-        r = _post(f"/post-purchase/v1/claims/{claim_id}/attachments",
+        r = _post(f"/post-purchase/v1/claims/{claim_id}/returns/attachments",
                   files={"file": (f"avaria_{i+1}.jpg", b, "image/jpeg")})
-        if isinstance(r, dict) and not r.get("_err"):
-            enviados.append(r.get("filename") or r.get("original_filename") or f"avaria_{i+1}.jpg")
+        if isinstance(r, dict) and r.get("file_name"):
+            enviados.append(r["file_name"])
         else:
+            dbg(f"AVARIA claim={claim_id} upload_anexo FAIL resp={str(r)[:200]}")
             return {"ok": False, "mode": "real", "etapa": "upload_anexo", "erro": r}
-    review = _post(f"/post-purchase/v1/claims/{claim_id}/returns/review",
-                   json_body={"reason": "SRF2", "message": msg, "attachments": enviados})
+    body = [{"reason": "SRF2", "message": msg, "attachments": enviados}]
+    review = _post(f"/post-purchase/v1/returns/{return_id}/return-review", json_body=body)
     ok = not (isinstance(review, dict) and review.get("_err"))
-    return {"ok": ok, "mode": "real", "anexos_enviados": enviados, "review": review}
+    dbg(f"AVARIA claim={claim_id} return={return_id} anexos={len(enviados)} -> ok={ok} resp={str(review)[:200]}")
+    return {"ok": ok, "mode": "real", "return_id": return_id, "anexos_enviados": enviados, "resp": review}
 
 
 def confirmar_revisao_ok(claim_id):
