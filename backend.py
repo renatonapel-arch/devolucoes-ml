@@ -22,6 +22,11 @@ def _aquecer_cache():
         ml._start_bg_build()
     except Exception:
         pass
+    # watcher de validação: compara sinal do ML x bipagem da Natalia por alguns dias
+    try:
+        ml.start_watch()
+    except Exception:
+        pass
 
 
 @app.get("/api/health")
@@ -183,6 +188,11 @@ def get_entradas(dia: str = None):
 @app.get("/api/entradas-visao")
 def entradas_visao():
     return JSONResponse(ml.visao_entradas())
+
+
+@app.get("/api/watch-status")
+def watch_status():
+    return JSONResponse(ml.watch_status())
 
 
 @app.get("/entrada")

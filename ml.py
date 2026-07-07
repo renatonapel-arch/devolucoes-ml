@@ -290,6 +290,32 @@ def build_item(oid, origem="devolucao"):
     }
 
 
+def _claims_por_order():
+    """Varre TODOS os claims (opened+closed) do seller -> {order_id: claim_id}. Usado por
+    _candidatos() (lista visível) e pelo watcher (_watch_scan) que monitora além da lista."""
+    if not _tok["seller"]:
+        _load_tokens()
+    seller = _tok["seller"]
+    out = {}
+    if not seller:
+        return out
+    for status, max_pages in (("opened", 40), ("closed", 20)):
+        offset = 0
+        for _ in range(max_pages):
+            r = g(f"/post-purchase/v1/claims/search?status={status}&limit=50&offset={offset}")
+            data = (r or {}).get("data") or []
+            total = ((r or {}).get("paging") or {}).get("total", 0)
+            for c in data:
+                oid = str(c.get("resource_id") or "")
+                cid = c.get("id")
+                if oid.startswith("2000") and cid:
+                    out.setdefault(oid, cid)
+            offset += 50
+            if not data or offset >= total:
+                break
+    return out
+
+
 def _candidatos():
     """Lista candidatos a 'devolução voltando'. Tenta primeiro índices locais (PC do Renato).
     Se não houver, puxa direto da API ML — funciona standalone na VPS."""
@@ -317,21 +343,7 @@ def _candidatos():
     # quando só havia 2 pacotes físicos). Quando o pacote chega de fato, o conferente BIPA
     # (a busca acha qualquer envio, mesmo delivered) — esse é o sinal real de chegada.
     A_CAMINHO = {"shipped"}
-    claims_por_order = {}     # rid -> cid
-    for status, max_pages in (("opened", 40), ("closed", 20)):
-        offset = 0
-        for _ in range(max_pages):
-            r = g(f"/post-purchase/v1/claims/search?status={status}&limit=50&offset={offset}")
-            data = (r or {}).get("data") or []
-            total = ((r or {}).get("paging") or {}).get("total", 0)
-            for c in data:
-                oid = str(c.get("resource_id") or "")
-                cid = c.get("id")
-                if oid.startswith("2000") and cid:
-                    claims_por_order.setdefault(oid, cid)
-            offset += 50
-            if not data or offset >= total:
-                break
+    claims_por_order = _claims_por_order()
     for oid, cid in claims_por_order.items():
         rt = g(f"/post-purchase/v2/claims/{cid}/returns") or {}
         if not (rt.get("shipments")):
@@ -688,6 +700,12 @@ _db.execute("CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)")
 # entradas = "deu entrada na doca" (fase 1). Tabela SEPARADA das conferências de propósito:
 # não interage com etapas/compute_status — impossível mudar o comportamento atual.
 _db.execute("CREATE TABLE IF NOT EXISTS entradas (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id TEXT, codigo TEXT, produto TEXT, comprador TEXT, nome TEXT, em TEXT, ts REAL)")
+# ml_watch = detecção automática de chegada via API do ML (fase de validação, roda em
+# paralelo à bipagem manual da Natalia por alguns dias até provar 100% de match).
+_db.execute("""CREATE TABLE IF NOT EXISTS ml_watch (
+    claim_id TEXT PRIMARY KEY, order_id TEXT, produto TEXT, comprador TEXT,
+    primeiro_visto_ts REAL, chegada_ts REAL, chegada_fonte TEXT,
+    notificado_ts REAL, bip_ts REAL, bip_nome TEXT, match TEXT, finalizado_ts REAL)""")
 _db.execute("CREATE INDEX IF NOT EXISTS ix_anexos_oid ON anexos(order_id)")
 _db.execute("CREATE INDEX IF NOT EXISTS ix_entradas_oid ON entradas(order_id)")
 _db.commit()
@@ -970,3 +988,188 @@ def visao_entradas(max_itens=500):
         dia = (d.get("em") or "")[:10]
         dias.setdefault(dia, []).append(d)
     return {"dias": [{"dia": k, "total": len(v), "itens": v} for k, v in dias.items()]}
+
+
+# =====================================================================
+# WATCHER — deteccao automatica de chegada via ML (fase de VALIDACAO)
+# Roda em paralelo a bipagem manual da Natalia por alguns dias, so pra provar
+# se o sinal do ML bate 100% com a chegada real, antes de decidir abandonar
+# a bipagem manual. NAO substitui a bipagem sozinho — so avisa e confere.
+#
+# Sinal de "chegou" = players[seller].available_actions contem return_review_ok
+# OU return_review_fail (validado ao vivo em 2026-07-06/07 contra o painel real
+# do ML: e exatamente quando o botao muda de "Ir para detalhe" pra "Ja revisei").
+# So watch a devolucoes cujo shipments[] tem uma perna com destination.name==
+# "seller_address" (a que termina no endereco fisico da Napel) — as que so vao
+# pro "warehouse" (CD ML) NUNCA chegam fisicamente aqui.
+# =====================================================================
+WATCH_POLL_SECONDS = int(os.environ.get("DEVOL_WATCH_POLL_SEG", "180"))
+WATCH_QUIET_NOTIFY_MIN = float(os.environ.get("DEVOL_WATCH_QUIET_NOTIFY_MIN", "12"))
+WATCH_QUIET_RECON_MIN = float(os.environ.get("DEVOL_WATCH_QUIET_RECON_MIN", "10"))
+WATCH_RECON_TIMEOUT_H = float(os.environ.get("DEVOL_WATCH_RECON_TIMEOUT_H", "3"))
+
+
+def _whatsapp(msg):
+    fenv = _read_env_file()
+    def pick(k):
+        return os.environ.get(k) or fenv.get(k)
+    url, token, inst, numero = (pick("EVOLUTION_API_URL"), pick("EVOLUTION_API_TOKEN"),
+                                 pick("EVOLUTION_INSTANCE"), pick("RENATO_WHATSAPP"))
+    if not all([url, token, inst, numero]):
+        dbg("WHATSAPP creds ausentes, nao enviado")
+        return False
+    try:
+        r = requests.post(url + "/message/sendText/" + inst,
+                          headers={"apikey": token, "Content-Type": "application/json"},
+                          json={"number": numero, "text": msg}, timeout=20)
+        dbg(f"WHATSAPP status={r.status_code}")
+        return r.status_code in (200, 201)
+    except Exception as e:
+        dbg(f"WHATSAPP FAIL {e}")
+        return False
+
+
+def _watch_scan():
+    agora = time.time()
+    with _lock:
+        rows = {r["claim_id"]: dict(r) for r in _db.execute("SELECT * FROM ml_watch").fetchall()}
+
+    # 1) registra qualquer claim novo com perna pro endereco da Napel (mesmo fora da lista visivel)
+    claims = _claims_por_order()
+    novos = 0
+    for oid, cid in claims.items():
+        cid = str(cid)
+        if cid in rows:
+            continue
+        rt = g(f"/post-purchase/v2/claims/{cid}/returns") or {}
+        sel = [s for s in (rt.get("shipments") or []) if (s.get("destination") or {}).get("name") == "seller_address"]
+        if not sel:
+            continue
+        o = g(f"/orders/{oid}") or {}
+        try:
+            produto = o["order_items"][0]["item"]["title"]
+        except Exception:
+            produto = ""
+        comprador = (o.get("buyer") or {}).get("nickname") or ""
+        with _lock:
+            _db.execute("INSERT OR IGNORE INTO ml_watch(claim_id,order_id,produto,comprador,primeiro_visto_ts) VALUES(?,?,?,?,?)",
+                        (cid, oid, produto, comprador, agora))
+            _db.commit()
+        rows[cid] = {"claim_id": cid, "order_id": oid, "produto": produto, "comprador": comprador, "chegada_ts": None}
+        novos += 1
+    if novos:
+        dbg(f"WATCH scan: {len(claims)} claims vistos, {novos} novos no watch")
+
+    # 2) checa quem ainda nao tem chegada confirmada — sinal = return_review_ok/fail disponivel
+    for r in [r for r in rows.values() if not r.get("chegada_ts")]:
+        cid = r["claim_id"]
+        c = g(f"/post-purchase/v1/claims/{cid}") or {}
+        acts = []
+        for p in (c.get("players") or []):
+            if p.get("type") == "seller":
+                acts = [a.get("action") for a in (p.get("available_actions") or [])]
+        if "return_review_ok" not in acts and "return_review_fail" not in acts:
+            continue
+        chegada_ts, fonte = agora, "available_actions"
+        try:
+            rt = g(f"/post-purchase/v2/claims/{cid}/returns") or {}
+            sel = [s for s in (rt.get("shipments") or []) if (s.get("destination") or {}).get("name") == "seller_address"]
+            if sel:
+                h = g(f"/shipments/{sel[0]['shipment_id']}/history") or {}
+                dd = (h.get("date_history") or {}).get("date_delivered")
+                if dd:
+                    chegada_ts, fonte = datetime.fromisoformat(dd).timestamp(), "shipment_delivered"
+        except Exception:
+            pass
+        with _lock:
+            _db.execute("UPDATE ml_watch SET chegada_ts=?, chegada_fonte=? WHERE claim_id=?", (chegada_ts, fonte, cid))
+            _db.commit()
+        dbg(f"WATCH chegada detectada claim={cid} order={r['order_id']} fonte={fonte}")
+
+    # 3) notifica o LOTE inteiro no WhatsApp só quando parar de chegar deteccao nova (entregador terminou)
+    with _lock:
+        pend_notif = _db.execute("SELECT * FROM ml_watch WHERE chegada_ts IS NOT NULL AND notificado_ts IS NULL").fetchall()
+    if pend_notif:
+        mais_recente = max(r["chegada_ts"] for r in pend_notif)
+        if (agora - mais_recente) / 60 >= WATCH_QUIET_NOTIFY_MIN:
+            linhas = "\n".join(f"- {(r['produto'] or '?')[:50]} (venda {r['order_id']})" for r in pend_notif)
+            msg = ("📦 ML sinalizou " + str(len(pend_notif)) + " devolucao(oes) entregue(s) na Napel:\n" + linhas +
+                   "\n\nPeça pra Natalia bipar a chegada (aba Entrada) pra conferirmos o match.")
+            if _whatsapp(msg):
+                ids = [r["claim_id"] for r in pend_notif]
+                placeholders = ",".join(["?"] * len(ids))
+                with _lock:
+                    _db.execute("UPDATE ml_watch SET notificado_ts=? WHERE claim_id IN (" + placeholders + ")",
+                                [agora] + ids)
+                    _db.commit()
+                dbg(f"WATCH notificado lote de {len(pend_notif)} itens")
+
+    # 4) reconcilia lotes ja notificados: compara com o que a Natalia bipou na janela seguinte
+    with _lock:
+        lotes = _db.execute("SELECT DISTINCT notificado_ts FROM ml_watch WHERE notificado_ts IS NOT NULL AND finalizado_ts IS NULL").fetchall()
+    for lr in lotes:
+        nts = lr["notificado_ts"]
+        with _lock:
+            itens_lote = _db.execute("SELECT * FROM ml_watch WHERE notificado_ts=?", (nts,)).fetchall()
+            bips_janela = _db.execute("SELECT * FROM entradas WHERE ts > ? AND ts < ?", (nts, nts + 4 * 3600)).fetchall()
+        bips_by_oid = {str(b["order_id"]): b for b in bips_janela if b["order_id"]}
+        for i in itens_lote:
+            if i["bip_ts"]:
+                continue
+            b = bips_by_oid.get(str(i["order_id"]))
+            if b:
+                with _lock:
+                    _db.execute("UPDATE ml_watch SET bip_ts=?, bip_nome=?, match='ok' WHERE claim_id=?",
+                                (b["ts"], b["nome"], i["claim_id"]))
+                    _db.commit()
+        with _lock:
+            itens_lote = _db.execute("SELECT * FROM ml_watch WHERE notificado_ts=?", (nts,)).fetchall()
+        ainda_pendente = [i for i in itens_lote if not i["bip_ts"]]
+        ultimo_bip = max([b["ts"] for b in bips_janela], default=None)
+        quiet_ok = bool(ultimo_bip) and (agora - ultimo_bip) / 60 >= WATCH_QUIET_RECON_MIN
+        timeout_ok = (agora - nts) / 3600 >= WATCH_RECON_TIMEOUT_H
+        if ainda_pendente and not quiet_ok and not timeout_ok:
+            continue  # ainda pode chegar bipagem — espera mais um ciclo
+        total = len(itens_lote)
+        ok = total - len(ainda_pendente)
+        extra = [b for b in bips_janela if str(b["order_id"]) not in {str(i["order_id"]) for i in itens_lote}]
+        if ok == total and not extra:
+            msg = "✅ Bipagem conferida: " + str(ok) + "/" + str(total) + " bateram 100% com o aviso do ML."
+        else:
+            msg = "⚠️ Bipagem conferida: " + str(ok) + "/" + str(total) + " bateram."
+            if ainda_pendente:
+                msg += "\n\nML disse que chegou, Natalia NAO bipou:\n" + "\n".join(
+                    "- " + (i["produto"] or "?")[:50] + " (venda " + str(i["order_id"]) + ")" for i in ainda_pendente)
+            if extra:
+                msg += "\n\nNatalia bipou, ML ainda nao confirmou:\n" + "\n".join(
+                    "- " + (e["produto"] or e["codigo"] or "?")[:50] for e in extra)
+        if _whatsapp(msg):
+            with _lock:
+                for i in itens_lote:
+                    _db.execute("UPDATE ml_watch SET finalizado_ts=? WHERE claim_id=?", (agora, i["claim_id"]))
+                _db.commit()
+            dbg(f"WATCH lote {nts} finalizado: {ok}/{total}")
+
+
+def _watch_loop():
+    while True:
+        try:
+            _watch_scan()
+        except Exception as e:
+            dbg(f"WATCH loop erro: {e}")
+        time.sleep(WATCH_POLL_SECONDS)
+
+
+def start_watch():
+    threading.Thread(target=_watch_loop, daemon=True).start()
+
+
+def watch_status():
+    """Painel de acompanhamento do match ML x bipagem (fase de validacao)."""
+    with _lock:
+        rows = _db.execute("SELECT * FROM ml_watch ORDER BY primeiro_visto_ts DESC LIMIT 200").fetchall()
+    itens = [dict(r) for r in rows]
+    finalizados = [i for i in itens if i.get("finalizado_ts")]
+    ok = sum(1 for i in finalizados if i.get("match") == "ok")
+    return {"total": len(itens), "finalizados": len(finalizados), "match_ok": ok,
+            "match_pct": round(100 * ok / len(finalizados), 1) if finalizados else None, "itens": itens}
