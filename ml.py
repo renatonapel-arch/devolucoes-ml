@@ -1138,9 +1138,11 @@ def _watch_scan():
         ok = total - len(ainda_pendente)
         extra = [b for b in bips_janela if str(b["order_id"]) not in {str(i["order_id"]) for i in itens_lote}]
         if ok == total and not extra:
-            msg = "✅ Bipagem conferida: " + str(ok) + "/" + str(total) + " bateram 100% com o aviso do ML."
+            msg = ("✅ Bipagem das devoluções ML que Natalia fez conferiu com as que o ML atualizou que entregou.\n"
+                   + str(ok) + "/" + str(total) + " bateram 100%.")
         else:
-            msg = "⚠️ Bipagem conferida: " + str(ok) + "/" + str(total) + " bateram."
+            msg = ("⚠️ Bipagem das devoluções ML que Natalia fez NÃO conferiu 100% com as que o ML atualizou que entregou.\n"
+                   + str(ok) + "/" + str(total) + " bateram.")
             if ainda_pendente:
                 msg += "\n\nML disse que chegou, Natalia NAO bipou:\n" + "\n".join(
                     "- " + (i["produto"] or "?")[:50] + " (venda " + str(i["order_id"]) + ")" for i in ainda_pendente)
