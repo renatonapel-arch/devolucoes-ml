@@ -1111,12 +1111,16 @@ def _watch_scan():
         nts = lr["notificado_ts"]
         with _lock:
             itens_lote = _db.execute("SELECT * FROM ml_watch WHERE notificado_ts=?", (nts,)).fetchall()
+            # janela SÓ pra achar bipagens "extras" (fora do lote) — nao usar pra decidir match:
+            # se o aviso atrasar (ex: bug de credencial), a bipagem real pode ter acontecido
+            # ANTES do notificado_ts, e ainda assim ser o match certo.
             bips_janela = _db.execute("SELECT * FROM entradas WHERE ts > ? AND ts < ?", (nts, nts + 4 * 3600)).fetchall()
-        bips_by_oid = {str(b["order_id"]): b for b in bips_janela if b["order_id"]}
         for i in itens_lote:
             if i["bip_ts"]:
                 continue
-            b = bips_by_oid.get(str(i["order_id"]))
+            with _lock:
+                # match por order_id em QUALQUER momento — o order_id ja e a prova inequivoca
+                b = _db.execute("SELECT * FROM entradas WHERE order_id=? ORDER BY ts DESC LIMIT 1", (i["order_id"],)).fetchone()
             if b:
                 with _lock:
                     _db.execute("UPDATE ml_watch SET bip_ts=?, bip_nome=?, match='ok' WHERE claim_id=?",
