@@ -1241,21 +1241,34 @@ def _watch_email_scan():
             dbg(f"WATCH_EMAIL lote {lote['msg_id'][:30]} finalizado: {ok}/{total}")
 
 
-def _watch_loop():
+WATCH_EMAIL_POLL_SECONDS = int(os.environ.get("DEVOL_WATCH_EMAIL_POLL_SEG", "60"))
+
+
+def _watch_email_loop():
+    """Loop RÁPIDO e independente, só pro e-mail — o horário da entrega varia todo dia,
+    então checa a cada 1min pra saber assim que chegar. Não espera a varredura da API
+    (lenta, minutos) porque ela não é mais time-critical (virou só registro de prazo)."""
+    while True:
+        try:
+            _watch_email_scan()
+        except Exception as e:
+            dbg(f"WATCH_EMAIL loop erro: {e}")
+        time.sleep(WATCH_EMAIL_POLL_SECONDS)
+
+
+def _watch_api_loop():
+    """Loop lento — só mantém o registro informativo do prazo de revisão do vendedor."""
     while True:
         try:
             _watch_scan()
         except Exception as e:
             dbg(f"WATCH loop erro: {e}")
-        try:
-            _watch_email_scan()
-        except Exception as e:
-            dbg(f"WATCH_EMAIL loop erro: {e}")
         time.sleep(WATCH_POLL_SECONDS)
 
 
 def start_watch():
-    threading.Thread(target=_watch_loop, daemon=True).start()
+    threading.Thread(target=_watch_email_loop, daemon=True).start()
+    threading.Thread(target=_watch_api_loop, daemon=True).start()
 
 
 def watch_status():
