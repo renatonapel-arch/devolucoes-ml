@@ -1086,75 +1086,159 @@ def _watch_scan():
             _db.commit()
         dbg(f"WATCH chegada detectada claim={cid} order={r['order_id']} fonte={fonte}")
 
-    # 3) notifica o LOTE inteiro no WhatsApp só quando parar de chegar deteccao nova (entregador terminou)
-    with _lock:
-        pend_notif = _db.execute("SELECT * FROM ml_watch WHERE chegada_ts IS NOT NULL AND notificado_ts IS NULL").fetchall()
-    if pend_notif:
-        mais_recente = max(r["chegada_ts"] for r in pend_notif)
-        if (agora - mais_recente) / 60 >= WATCH_QUIET_NOTIFY_MIN:
-            linhas = "\n".join(f"- {(r['produto'] or '?')[:50]} (venda {r['order_id']})" for r in pend_notif)
-            msg = ("📦 ML sinalizou " + str(len(pend_notif)) + " devolucao(oes) entregue(s) na Napel:\n" + linhas +
-                   "\n\nPeça pra Natalia bipar a chegada (aba Entrada) pra conferirmos o match.")
-            if _whatsapp(msg):
-                ids = [r["claim_id"] for r in pend_notif]
-                placeholders = ",".join(["?"] * len(ids))
-                with _lock:
-                    _db.execute("UPDATE ml_watch SET notificado_ts=? WHERE claim_id IN (" + placeholders + ")",
-                                [agora] + ids)
-                    _db.commit()
-                dbg(f"WATCH notificado lote de {len(pend_notif)} itens")
+    # NOTA (2026-07-09): os avisos de "chegou" + conferência com a bipagem NÃO usam mais esse
+    # sinal (return_review_ok/fail) como gatilho — provado que o e-mail "Detalhe da entrega" do
+    # ML é mais rápido (~14min vs 6-43h de atraso) e cobre também devoluções "por problema na
+    # entrega" (que nunca ganham return_review_ok). Ver _watch_email_scan() abaixo. chegada_ts
+    # aqui continua sendo calculado só como registro informativo (prazo de revisão do vendedor).
 
-    # 4) reconcilia lotes ja notificados: compara com o que a Natalia bipou na janela seguinte
-    with _lock:
-        lotes = _db.execute("SELECT DISTINCT notificado_ts FROM ml_watch WHERE notificado_ts IS NOT NULL AND finalizado_ts IS NULL").fetchall()
-    for lr in lotes:
-        nts = lr["notificado_ts"]
+
+# =====================================================================
+# WATCHER — e-mail "Detalhe da entrega" (gatilho PRINCIPAL de chegada)
+# O ML manda esse e-mail pra ecommerce@napel.com.br minutos depois de cada visita de entrega
+# de devolução na Napel — é o registro primário (motorista assinou), não um sinal derivado.
+# Lido via IMAP direto (GMAIL_USER/GMAIL_APP_PASS) — não depende de sessão de navegador nem
+# de mim. Cobre os 2 tipos ("revisão do vendedor" e "problema na entrega"), o watcher da API
+# só cobria o primeiro.
+# =====================================================================
+import imaplib, email as _email_lib, re as _re
+
+_db.execute("""CREATE TABLE IF NOT EXISTS email_lotes (
+    msg_id TEXT PRIMARY KEY, assunto TEXT, chegada_ts REAL, total INT,
+    revisao_n INT, revisao_prazo TEXT, problema_n INT, problema_prazo TEXT,
+    notificado_ts REAL, finalizado_ts REAL)""")
+_db.commit()
+
+
+def _imap_conn():
+    fenv = _read_env_file()
+    user = os.environ.get("GMAIL_USER") or fenv.get("GMAIL_USER")
+    pw = os.environ.get("GMAIL_APP_PASS") or fenv.get("GMAIL_APP_PASS")
+    if not (user and pw):
+        dbg("EMAIL_ROMANEIO creds ausentes (GMAIL_USER/GMAIL_APP_PASS)")
+        return None
+    conn = imaplib.IMAP4_SSL("imap.gmail.com")
+    conn.login(user, pw)
+    conn.select("INBOX")
+    return conn
+
+
+def _parse_email_romaneio(raw_bytes):
+    msg = _email_lib.message_from_bytes(raw_bytes)
+    html = ""
+    if msg.is_multipart():
+        for part in msg.walk():
+            if part.get_content_type() == "text/html":
+                html = part.get_payload(decode=True).decode(part.get_content_charset() or "utf-8", errors="ignore")
+                break
+    else:
+        html = msg.get_payload(decode=True).decode(msg.get_content_charset() or "utf-8", errors="ignore")
+    if not html:
+        return None
+    m = _re.search(r"Entregamos\s+(\d+)\s+pacotes", html)
+    total = int(m.group(1)) if m else (1 if _re.search(r"Entregamos\s+o\s+pacote", html) else None)
+    if total is None:
+        return None
+
+    def bloco(rotulo):
+        mm = _re.search(r"(\d+)\s*pacotes?\s*de\s*devoluções\s*" + rotulo +
+                        r".*?antes\s*de\s*([^.<]+)\.", html, _re.S)
+        return (int(mm.group(1)), mm.group(2).strip()) if mm else (0, None)
+
+    rev_n, rev_prazo = bloco(r"com\s*revisão\s*do\s*vendedor")
+    prob_n, prob_prazo = bloco(r"por\s*problemas\s*na\s*entrega")
+    from email.utils import parsedate_to_datetime
+    dt = parsedate_to_datetime(msg.get("Date"))
+    return {"msg_id": msg.get("Message-ID") or msg.get("Date"), "assunto": msg.get("Subject") or "",
+            "chegada_ts": dt.timestamp(), "total": total,
+            "revisao_n": rev_n, "revisao_prazo": rev_prazo, "problema_n": prob_n, "problema_prazo": prob_prazo}
+
+
+def _watch_email_scan():
+    conn = _imap_conn()
+    if not conn:
+        return
+    try:
+        typ, data = conn.search(None, '(FROM "no-reply@mercadolivre.com.br" SUBJECT "Detalhe da entrega")')
+        ids = data[0].split() if data and data[0] else []
         with _lock:
-            itens_lote = _db.execute("SELECT * FROM ml_watch WHERE notificado_ts=?", (nts,)).fetchall()
-            # janela SÓ pra achar bipagens "extras" (fora do lote) — nao usar pra decidir match:
-            # se o aviso atrasar (ex: bug de credencial), a bipagem real pode ter acontecido
-            # ANTES do notificado_ts, e ainda assim ser o match certo.
-            bips_janela = _db.execute("SELECT * FROM entradas WHERE ts > ? AND ts < ?", (nts, nts + 4 * 3600)).fetchall()
-        for i in itens_lote:
-            if i["bip_ts"]:
+            ja_visto = {r["msg_id"] for r in _db.execute("SELECT msg_id FROM email_lotes").fetchall()}
+        primeira_carga = len(ja_visto) == 0
+        for mid in ids:
+            typ, msgdata = conn.fetch(mid, "(RFC822)")
+            if not msgdata or not msgdata[0]:
+                continue
+            info = _parse_email_romaneio(msgdata[0][1])
+            if not info or info["msg_id"] in ja_visto:
                 continue
             with _lock:
-                # match por order_id em QUALQUER momento — o order_id ja e a prova inequivoca
-                b = _db.execute("SELECT * FROM entradas WHERE order_id=? ORDER BY ts DESC LIMIT 1", (i["order_id"],)).fetchone()
-            if b:
-                with _lock:
-                    _db.execute("UPDATE ml_watch SET bip_ts=?, bip_nome=?, match='ok' WHERE claim_id=?",
-                                (b["ts"], b["nome"], i["claim_id"]))
-                    _db.commit()
-        with _lock:
-            itens_lote = _db.execute("SELECT * FROM ml_watch WHERE notificado_ts=?", (nts,)).fetchall()
-        ainda_pendente = [i for i in itens_lote if not i["bip_ts"]]
-        ultimo_bip = max([b["ts"] for b in bips_janela], default=None)
-        quiet_ok = bool(ultimo_bip) and (agora - ultimo_bip) / 60 >= WATCH_QUIET_RECON_MIN
-        timeout_ok = (agora - nts) / 3600 >= WATCH_RECON_TIMEOUT_H
-        if ainda_pendente and not quiet_ok and not timeout_ok:
-            continue  # ainda pode chegar bipagem — espera mais um ciclo
-        total = len(itens_lote)
-        ok = total - len(ainda_pendente)
-        extra = [b for b in bips_janela if str(b["order_id"]) not in {str(i["order_id"]) for i in itens_lote}]
-        if ok == total and not extra:
-            msg = ("✅ Bipagem das devoluções ML que Natalia fez conferiu com as que o ML atualizou que entregou.\n"
-                   + str(ok) + "/" + str(total) + " bateram 100%.")
-        else:
-            msg = ("⚠️ Bipagem das devoluções ML que Natalia fez NÃO conferiu 100% com as que o ML atualizou que entregou.\n"
-                   + str(ok) + "/" + str(total) + " bateram.")
-            if ainda_pendente:
-                msg += "\n\nML disse que chegou, Natalia NAO bipou:\n" + "\n".join(
-                    "- " + (i["produto"] or "?")[:50] + " (venda " + str(i["order_id"]) + ")" for i in ainda_pendente)
-            if extra:
-                msg += "\n\nNatalia bipou, ML ainda nao confirmou:\n" + "\n".join(
-                    "- " + (e["produto"] or e["codigo"] or "?")[:50] for e in extra)
+                if primeira_carga:
+                    # semeia o historico sem notificar — só passa a avisar dali pra frente
+                    _db.execute("""INSERT OR IGNORE INTO email_lotes
+                        (msg_id,assunto,chegada_ts,total,revisao_n,revisao_prazo,problema_n,problema_prazo,notificado_ts,finalizado_ts)
+                        VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                        (info["msg_id"], info["assunto"], info["chegada_ts"], info["total"],
+                         info["revisao_n"], info["revisao_prazo"], info["problema_n"], info["problema_prazo"],
+                         time.time(), time.time()))
+                else:
+                    _db.execute("""INSERT OR IGNORE INTO email_lotes
+                        (msg_id,assunto,chegada_ts,total,revisao_n,revisao_prazo,problema_n,problema_prazo)
+                        VALUES (?,?,?,?,?,?,?,?)""",
+                        (info["msg_id"], info["assunto"], info["chegada_ts"], info["total"],
+                         info["revisao_n"], info["revisao_prazo"], info["problema_n"], info["problema_prazo"]))
+                _db.commit()
+            if not primeira_carga:
+                dbg(f"WATCH_EMAIL novo lote msg={info['msg_id'][:30]} total={info['total']}")
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
+    agora = time.time()
+    # notifica lotes novos (o proprio e-mail ja e o "fim da visita" — sem precisar de quiet-period)
+    with _lock:
+        pend = _db.execute("SELECT * FROM email_lotes WHERE notificado_ts IS NULL").fetchall()
+    for lote in pend:
+        partes = []
+        if lote["revisao_n"]:
+            partes.append(f"- {lote['revisao_n']} de devolução com revisão do vendedor (informar como chegou antes de {lote['revisao_prazo']})")
+        if lote["problema_n"]:
+            partes.append(f"- {lote['problema_n']} de devolução por problema na entrega (prazo {lote['problema_prazo']})")
+        msg = (f"📦 ML entregou {lote['total']} devolução(ões) na Napel agora:\n" + "\n".join(partes) +
+               "\n\nPeça pra Natalia bipar a chegada (aba Entrada) pra conferirmos o match.")
         if _whatsapp(msg):
             with _lock:
-                for i in itens_lote:
-                    _db.execute("UPDATE ml_watch SET finalizado_ts=? WHERE claim_id=?", (agora, i["claim_id"]))
+                _db.execute("UPDATE email_lotes SET notificado_ts=? WHERE msg_id=?", (agora, lote["msg_id"]))
                 _db.commit()
-            dbg(f"WATCH lote {nts} finalizado: {ok}/{total}")
+            dbg(f"WATCH_EMAIL notificado lote {lote['msg_id'][:30]} total={lote['total']}")
+
+    # reconcilia lotes notificados: compara total do e-mail com quantas bipagens vieram depois
+    with _lock:
+        lotes = _db.execute("SELECT * FROM email_lotes WHERE notificado_ts IS NOT NULL AND finalizado_ts IS NULL").fetchall()
+    for lote in lotes:
+        nts = lote["notificado_ts"]
+        with _lock:
+            bips = _db.execute("SELECT * FROM entradas WHERE ts > ? AND ts < ?", (nts, nts + 4 * 3600)).fetchall()
+        ultimo_bip = max([b["ts"] for b in bips], default=None)
+        quiet_ok = bool(ultimo_bip) and (agora - ultimo_bip) / 60 >= WATCH_QUIET_RECON_MIN
+        timeout_ok = (agora - nts) / 3600 >= WATCH_RECON_TIMEOUT_H
+        if not bips and not timeout_ok:
+            continue
+        if bips and not quiet_ok and not timeout_ok:
+            continue
+        ok = len(bips)
+        total = lote["total"]
+        if ok == total:
+            msg = f"✅ Bipagem conferida: {ok}/{total} bateram 100% com o e-mail do ML."
+        else:
+            msg = (f"⚠️ Bipagem conferida: {ok}/{total} bateram com o e-mail do ML.\n"
+                   f"Confira a aba Entrada — pode ter pacote não bipado ou bipagem a mais.")
+        if _whatsapp(msg):
+            with _lock:
+                _db.execute("UPDATE email_lotes SET finalizado_ts=? WHERE msg_id=?", (agora, lote["msg_id"]))
+                _db.commit()
+            dbg(f"WATCH_EMAIL lote {lote['msg_id'][:30]} finalizado: {ok}/{total}")
 
 
 def _watch_loop():
@@ -1163,6 +1247,10 @@ def _watch_loop():
             _watch_scan()
         except Exception as e:
             dbg(f"WATCH loop erro: {e}")
+        try:
+            _watch_email_scan()
+        except Exception as e:
+            dbg(f"WATCH_EMAIL loop erro: {e}")
         time.sleep(WATCH_POLL_SECONDS)
 
 
