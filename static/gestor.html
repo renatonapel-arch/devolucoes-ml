@@ -243,18 +243,18 @@ tbody tr:hover{background:var(--sky-bg)}
     </div>
   </header>
 
-  <div class="kpis" id="kpis">
+  <div class="kpis" id="kpis" style="display:none">
     <div class="loading" style="grid-column:1/-1">Carregando dados ao vivo…</div>
   </div>
 
   <div class="tabs">
-    <span class="tab on" id="gt-dev" onclick="showTab('dev')"><svg class="i"><use href="#i-list"/></svg>Devoluções</span>
-    <span class="tab" id="gt-ana" onclick="showTab('ana')"><svg class="i"><use href="#i-chart"/></svg>Análises</span>
-    <span class="tab" id="gt-hist" onclick="showTab('hist')"><svg class="i"><use href="#i-history"/></svg>Histórico</span>
-    <span class="tab" id="gt-ent" onclick="showTab('ent')"><svg class="i"><use href="#i-in"/></svg>Entradas <b id="ent-badge" style="display:none;background:var(--err-bg);color:var(--err-fg);padding:1px 8px;border-radius:999px;font-size:11px"></b></span>
+    <span class="tab" id="gt-dev" onclick="showTab('dev')" style="display:none"><svg class="i"><use href="#i-list"/></svg>Devoluções</span>
+    <span class="tab" id="gt-ana" onclick="showTab('ana')" style="display:none"><svg class="i"><use href="#i-chart"/></svg>Análises</span>
+    <span class="tab" id="gt-hist" onclick="showTab('hist')" style="display:none"><svg class="i"><use href="#i-history"/></svg>Histórico</span>
+    <span class="tab on" id="gt-ent" onclick="showTab('ent')"><svg class="i"><use href="#i-in"/></svg>Entradas <b id="ent-badge" style="display:none;background:var(--err-bg);color:var(--err-fg);padding:1px 8px;border-radius:999px;font-size:11px"></b></span>
   </div>
 
-  <div id="tab-dev">
+  <div id="tab-dev" style="display:none">
     <div class="card">
       <div class="card-head">
         <div class="t"><svg class="i"><use href="#i-list"/></svg>Lista <span class="n" id="tbl-count"></span></div>
@@ -298,7 +298,7 @@ tbody tr:hover{background:var(--sky-bg)}
     </div>
   </div>
 
-  <div id="tab-ent" style="display:none">
+  <div id="tab-ent">
     <div class="card">
       <div class="card-head"><div class="t"><svg class="i"><use href="#i-in"/></svg>Entradas na doca</div><div class="n">pacotes que chegaram fisicamente (bipados na chegada)</div></div>
       <div style="padding:14px 20px 0"><div class="seg" id="ent-filters"></div></div>
