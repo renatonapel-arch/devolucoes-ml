@@ -667,7 +667,8 @@ function renderEntLista(){
         st=`<span class="pill p-warn">${svg("i-clock")}${rotulo} há ${fmtH(h)}</span>`;
       }
       else st=`<span class="pill p-ok">${svg("i-check")}concluída em ${fmtH(e.horas_para_concluir||0)}</span>`;
-      return `<div class="row-line">
+      const clickable = e.order_id && e.conf_status !== "nao_identificada";
+      return `<div class="row-line" ${clickable?`style="cursor:pointer" onclick="openConfDetail('${e.order_id}')"`:""}>
         <span class="pill p-navy mono" style="flex:0 0 auto">${(e.em||"").slice(11)}</span>
         <div style="flex:1;min-width:0">
           <div class="prod-mini">${e.produto||e.codigo}</div>
