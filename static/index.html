@@ -602,7 +602,7 @@ let FICHA = {d:null, by:null, conf:null, view:"resumo", step:0, hero:"", blocks:
 async function openFicha(i, by){ return renderFicha(DADOS[i], by); }
 async function renderFicha(d, by){
   FICHA.d=d; FICHA.by=by; FICHA.view="resumo"; FICHA.step=0;
-  CONF = {chegada:[], chegadaFalhou:[], avaria:[], claim_id:d.claim_id, order_id:d.order_id};
+  CONF = {chegada:[], chegadaFalhou:[], produto:[], avaria:[], claim_id:d.claim_id, order_id:d.order_id};
   try{ FICHA.conf = await (await fetch("/api/conferencia/"+encodeURIComponent(d.order_id))).json(); }
   catch(e){ FICHA.conf = {etapas:{}, status:"nao_iniciada"}; }
   FICHA.lockWarn = null;
@@ -912,7 +912,7 @@ function trocarUsuario(){
 function renderUserChip(){ const u=getUser(); const el=document.getElementById("userchip"); if(el) el.textContent = u? ("👤 "+u.nome+" · "+u.perfil) : "entrar"; }
 
 /* ===== CONFERÊNCIA (multi-etapa, persistente) ===== */
-let CONF = {chegada:[], chegadaFalhou:[], avaria:[], claim_id:null, order_id:null};
+let CONF = {chegada:[], chegadaFalhou:[], produto:[], avaria:[], claim_id:null, order_id:null};
 function rotuloDesf(x){return {certo:"✅ Certo / perfeito",avariado:"⚠️ Avariado",trocado:"🔄 Trocado / golpe",faltando:"📉 Faltando peças",vazio:"📦 Caixa vazia"}[x]||x||"—";}
 function rotuloEstoque(x){return {volta:"📥 Voltou ao estoque",descarte:"🗑 Descartado",retido:"🔒 Retido como prova"}[x]||"—";}
 function etapaWrap(n, titulo, done, body){
@@ -980,7 +980,13 @@ function stepBody(key,d,et){
     const aviso = naoEnt
       ? `<div class="sige-note" style="background:#eef2f7;border-color:#cbd5e1;color:var(--ink-600)">ℹ️ <b>Não-entrega</b> — o comprador não recebeu (recusou ou ML não conseguiu entregar). Sem reclamação no ML pra responder — registre só o estado físico aqui.</div>`
       : "";
-    return aviso + `<div class="cs-desc">Confira se bate com a venda e informe o estado encontrado:</div>
+    const ja = (CONF.produto||[]).length + (((et.abertura||{}).fotos_produto)||0);
+    return aviso + `<div class="cs-desc"><b>1º)</b> Abra a embalagem e fotografe o produto — mesmo que esteja perfeito.</div>
+    <div class="photogrid">
+      <label class="pslot"><input type="file" accept="image/*" capture="environment" hidden onchange="snap(this,'produto')"><span>＋</span>Produto 1</label>
+      <label class="pslot"><input type="file" accept="image/*" capture="environment" hidden onchange="snap(this,'produto')"><span>＋</span>Produto 2</label>
+      <label class="pslot vid"><input type="file" accept="video/*" capture="environment" hidden onchange="snap(this,'produto')"><span>🎥</span>Vídeo</label></div>
+    <div class="cs-desc" style="margin-top:14px"><b>2º)</b> Informe o estado encontrado:</div>
     <div class="desf-grid">
       <button class="desf" onclick="salvarAbertura('certo')">✅ Certo / perfeito</button>
       <button class="desf" onclick="salvarAbertura('avariado')">⚠️ Avariado</button>
@@ -1096,16 +1102,21 @@ async function snap(input, tipo){
     return;
   }
   // mostra a miniatura na hora
-  (tipo==="avaria"?CONF.avaria:CONF.chegada).push(durl);
+  const bucket = tipo==="avaria"?CONF.avaria : tipo==="produto"?CONF.produto : CONF.chegada;
+  bucket.push(durl);
   slot.style.backgroundImage=`url(${durl})`; slot.style.backgroundSize="cover"; slot.style.backgroundPosition="center";
   slot.classList.add("done");
   input.value="";
-  // CHEGADA: sobe a foto JÁ (assim o "Salvar" não precisa carregar nenhuma foto)
-  if(tipo!=="avaria"){
+  // CHEGADA e PRODUTO: sobe a foto JÁ (assim o desfecho não precisa carregar nenhuma foto)
+  if(tipo==="chegada"){
     if(sp) sp.textContent="⏫";
     const ok = await uploadAnexo(durl, "chegada", "chegada");
     if(ok){ if(sp) sp.textContent="✅"; }
     else { if(sp) sp.textContent="⚠️"; CONF.chegadaFalhou.push(durl); }  // guarda p/ reenviar no Salvar
+  } else if(tipo==="produto"){
+    if(sp) sp.textContent="⏫";
+    const ok = await uploadAnexo(durl, "abertura", "produto");
+    if(sp) sp.textContent = ok ? "✅" : "⚠️";
   } else {
     if(sp) sp.textContent="✅";   // avaria sobe junto com a reclamação
   }
@@ -1150,7 +1161,14 @@ async function registrarVolume(n, N){
 }
 async function salvarAbertura(desf){
   if(!requireUser()) return;
-  const r=await postEtapa("abertura", {desfecho:desf}); if(!r||r.__erro)return;
+  // exige ao menos 1 foto do produto ABERTO — vale pra qualquer desfecho (inclusive 'certo')
+  const jaTem = ((((FICHA.conf||{}).etapas||{}).abertura||{}).fotos_produto)||0;
+  if((CONF.produto||[]).length + jaTem < 1){
+    alert("📸 Tire ao menos 1 foto do produto depois de abrir a embalagem — mesmo que esteja perfeito.");
+    return;
+  }
+  const r=await postEtapa("abertura", {desfecho:desf, fotos_produto: (CONF.produto||[]).length + jaTem}); if(!r||r.__erro)return;
+  CONF.produto=[];
   // desfecho certo/perfeito: confirma a revisão no ML ("Já revisei") pra não ficar dias no painel
   if(desf==="certo" && FICHA.d.claim_id){
     try{ await fetch("/api/revisao-ok",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({claim_id:FICHA.d.claim_id})}); }catch(e){}

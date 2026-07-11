@@ -579,7 +579,7 @@ async function openConfDetail(oid){
       <div style="flex:1;min-width:0"><div class="m-t">${ETLBL[k]||k}</div>${det?`<div class="m-d">${det}</div>`:""}<div class="m-who">${who}</div></div>
     </div>`;
   }).join("");
-  const TIPOLBL={chegada:"Provas de chegada",avaria:"Provas de avaria"};
+  const TIPOLBL={chegada:"Provas de chegada",produto:"Produto após abrir",avaria:"Provas de avaria"};
   const grupos={}; anexos.forEach(a=>{ (grupos[a.tipo]=grupos[a.tipo]||[]).push(a); });
   const anexosHtml = anexos.length
     ? Object.entries(grupos).map(([tipo,arr])=>`
