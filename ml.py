@@ -1208,6 +1208,16 @@ def _watch_email_scan():
 
     agora = time.time()
     # notifica lotes novos (o proprio e-mail ja e o "fim da visita" — sem precisar de quiet-period)
+    # DESLIGADO em 2026-07-13 (Renato): loop de retransmissao na instancia vendedor-renato2
+    # (Evolution/WhatsApp nao confirma entrega de NENHUMA mensagem nova nesse numero — problema
+    # de infra fora do devolucoes-ml, afeta cotacao/SIGE tambem). Ate a Evolution ser corrigida,
+    # so registra o lote (chegada_ts, total, etc.) sem mandar WhatsApp. Reativar via
+    # DEVOL_WATCH_EMAIL_NOTIFY=1 quando a instancia estiver saudavel de novo.
+    if os.environ.get("DEVOL_WATCH_EMAIL_NOTIFY", "0") != "1":
+        with _lock:
+            _db.execute("UPDATE email_lotes SET notificado_ts=?, finalizado_ts=? WHERE notificado_ts IS NULL", (agora, agora))
+            _db.commit()
+        return
     with _lock:
         pend = _db.execute("SELECT * FROM email_lotes WHERE notificado_ts IS NULL").fetchall()
     for lote in pend:
