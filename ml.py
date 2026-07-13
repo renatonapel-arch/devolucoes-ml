@@ -1007,6 +1007,9 @@ WATCH_POLL_SECONDS = int(os.environ.get("DEVOL_WATCH_POLL_SEG", "180"))
 WATCH_QUIET_NOTIFY_MIN = float(os.environ.get("DEVOL_WATCH_QUIET_NOTIFY_MIN", "12"))
 WATCH_QUIET_RECON_MIN = float(os.environ.get("DEVOL_WATCH_QUIET_RECON_MIN", "10"))
 WATCH_RECON_TIMEOUT_H = float(os.environ.get("DEVOL_WATCH_RECON_TIMEOUT_H", "3"))
+# limite de tentativas de envio por lote — evita loop de spam quando a Evolution API fica
+# instavel (visto ao vivo em 2026-07-13: 502 por ~20min seguidos, retentando a cada 1min).
+WATCH_WHATSAPP_MAX_TENTATIVAS = int(os.environ.get("DEVOL_WATCH_WHATSAPP_MAX_TENTATIVAS", "3"))
 
 
 def _whatsapp(msg):
@@ -1106,7 +1109,15 @@ import imaplib, email as _email_lib, re as _re
 _db.execute("""CREATE TABLE IF NOT EXISTS email_lotes (
     msg_id TEXT PRIMARY KEY, assunto TEXT, chegada_ts REAL, total INT,
     revisao_n INT, revisao_prazo TEXT, problema_n INT, problema_prazo TEXT,
-    notificado_ts REAL, finalizado_ts REAL)""")
+    notificado_ts REAL, finalizado_ts REAL, tentativas_notif INT DEFAULT 0, tentativas_final INT DEFAULT 0)""")
+try:
+    _db.execute("ALTER TABLE email_lotes ADD COLUMN tentativas_notif INT DEFAULT 0")
+except Exception:
+    pass
+try:
+    _db.execute("ALTER TABLE email_lotes ADD COLUMN tentativas_final INT DEFAULT 0")
+except Exception:
+    pass
 _db.commit()
 
 
@@ -1207,11 +1218,20 @@ def _watch_email_scan():
             partes.append(f"- {lote['problema_n']} de devolução por problema na entrega (prazo {lote['problema_prazo']})")
         msg = (f"📦 ML entregou {lote['total']} devolução(ões) na Napel agora:\n" + "\n".join(partes) +
                "\n\nPeça pra Natalia bipar a chegada (aba Entrada) pra conferirmos o match.")
-        if _whatsapp(msg):
+        ok_send = _whatsapp(msg)
+        tent = (lote["tentativas_notif"] or 0) + 1
+        if ok_send or tent >= WATCH_WHATSAPP_MAX_TENTATIVAS:
             with _lock:
-                _db.execute("UPDATE email_lotes SET notificado_ts=? WHERE msg_id=?", (agora, lote["msg_id"]))
+                _db.execute("UPDATE email_lotes SET notificado_ts=?, tentativas_notif=? WHERE msg_id=?", (agora, tent, lote["msg_id"]))
                 _db.commit()
-            dbg(f"WATCH_EMAIL notificado lote {lote['msg_id'][:30]} total={lote['total']}")
+            if ok_send:
+                dbg(f"WATCH_EMAIL notificado lote {lote['msg_id'][:30]} total={lote['total']}")
+            else:
+                dbg(f"WATCH_EMAIL DESISTIU de notificar lote {lote['msg_id'][:30]} apos {tent} tentativas com erro (evita loop)")
+        else:
+            with _lock:
+                _db.execute("UPDATE email_lotes SET tentativas_notif=? WHERE msg_id=?", (tent, lote["msg_id"]))
+                _db.commit()
 
     # reconcilia lotes notificados: compara total do e-mail com quantas bipagens vieram depois
     with _lock:
@@ -1234,11 +1254,18 @@ def _watch_email_scan():
         else:
             msg = (f"⚠️ Bipagem conferida: {ok}/{total} bateram com o e-mail do ML.\n"
                    f"Confira a aba Entrada — pode ter pacote não bipado ou bipagem a mais.")
-        if _whatsapp(msg):
+        ok_send = _whatsapp(msg)
+        tent = (lote["tentativas_final"] or 0) + 1
+        if ok_send or tent >= WATCH_WHATSAPP_MAX_TENTATIVAS:
             with _lock:
-                _db.execute("UPDATE email_lotes SET finalizado_ts=? WHERE msg_id=?", (agora, lote["msg_id"]))
+                _db.execute("UPDATE email_lotes SET finalizado_ts=?, tentativas_final=? WHERE msg_id=?", (agora, tent, lote["msg_id"]))
                 _db.commit()
-            dbg(f"WATCH_EMAIL lote {lote['msg_id'][:30]} finalizado: {ok}/{total}")
+            dbg(f"WATCH_EMAIL lote {lote['msg_id'][:30]} finalizado: {ok}/{total}" if ok_send else
+                f"WATCH_EMAIL DESISTIU de finalizar lote {lote['msg_id'][:30]} apos {tent} tentativas com erro")
+        else:
+            with _lock:
+                _db.execute("UPDATE email_lotes SET tentativas_final=? WHERE msg_id=?", (tent, lote["msg_id"]))
+                _db.commit()
 
 
 WATCH_EMAIL_POLL_SECONDS = int(os.environ.get("DEVOL_WATCH_EMAIL_POLL_SEG", "60"))
