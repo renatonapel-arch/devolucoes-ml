@@ -1195,6 +1195,13 @@ async function enviarReclamacao(btn){
   try{
     const r=await fetch("/api/avaria",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({claim_id:FICHA.d.claim_id, mensagem:msg, fotos:CONF.avaria, motivo})});
     const j=await r.json();
+    // so avanca quando REALMENTE foi enviado (ou dry-run em modo teste) — nao chuta sucesso
+    // quando o backend recusou (ex: j.skip=true, ML ainda nao libera a acao pra essa devolucao)
+    if(j.mode!=="teste" && !j.ok){
+      btn.textContent="✅ Aprovar e enviar ao ML"; btn.style.pointerEvents="";
+      alert("⚠️ NÃO enviado ao ML.\n"+(j.nota||j.erro||"Tente novamente em alguns minutos.")+"\n\nO card continua nesta etapa — tente de novo mais tarde.");
+      return;
+    }
     const r2=await postEtapa("reclamacao_ml", {enviado:true, resultado:"aguardando", anexos:CONF.avaria, anexo_tipo:"avaria", modo:j.mode});
     if(!r2||r2.__erro){ btn.style.pointerEvents=""; return; }
     alert(j.mode==="teste" ? ("🧪 MODO TESTE — nada foi ao ML.\nReclamação registrada ("+motivo+", "+CONF.avaria.length+" foto(s)).\nO card foi para \"Aguardando ML\".") : ("✅ Enviado ao ML (modo real, "+motivo+"). Anexos: "+(j.anexos_enviados||[]).length));
