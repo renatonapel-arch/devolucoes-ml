@@ -454,21 +454,25 @@ def build_aguardando(force=False, max_idade_min=30):
 
 
 def buscar(code, force_ml=False):
-    """Acha a devolução por qualquer ID. Primeiro na lista, depois ao vivo no ML."""
+    """Acha a devolução por qualquer ID. Primeiro na lista (inclui rastreio dos Correios
+    AP…BR e todos os shipment_ids/claim_id/etc), depois ao vivo no ML."""
     code = (code or "").strip()
     if not code:
         return {"found": False, "reason": "vazio"}
     cache = build_aguardando()
     up = code.upper()
+    # SEMPRE tenta lista primeiro — cobre rastreio dos Correios (AP…BR) que a API do ML
+    # nao aceita, e cobre casos em que o "nº da venda do painel" difere do order_id
+    # canonico da API (ML mostra IDs diferentes nos 2 lugares).
+    for it in cache["itens"]:
+        for f in ("order_id", "pack_id", "claim_id", "shipment_id", "tracking", "item_id"):
+            v = str(it.get(f) or "").upper()
+            if v and v == up:
+                return {"found": True, "in_list": True, "by": f, "item": it}
+        for sid in (it.get("shipment_ids") or []):   # todos os envios da devolução
+            if str(sid).upper() == up:
+                return {"found": True, "in_list": True, "by": "shipment_id", "item": it}
     if not force_ml:
-        for it in cache["itens"]:
-            for f in ("order_id", "pack_id", "claim_id", "shipment_id", "tracking", "item_id"):
-                v = str(it.get(f) or "").upper()
-                if v and v == up:
-                    return {"found": True, "in_list": True, "by": f, "item": it}
-            for sid in (it.get("shipment_ids") or []):   # todos os envios da devolução
-                if str(sid).upper() == up:
-                    return {"found": True, "in_list": True, "by": "shipment_id", "item": it}
         return {"found": False, "in_list": False, "code": code}
 
     # ---- busca AO VIVO no ML (fora da lista) ----
@@ -488,7 +492,7 @@ def buscar(code, force_ml=False):
         if it:
             return {"found": True, "in_list": False, "by": "ml", "item": it}
     return {"found": False, "in_list": False, "code": code,
-            "hint": "Sem resultado no ML por esse código. Tente o nº da venda (2000…) ou o cód. de envio (47…)."}
+            "hint": "Sem resultado por esse código. Tente o nº da venda (2000…), o cód. de envio (47…), o rastreio dos Correios (AP…BR) ou o nome do produto."}
 
 
 # =====================================================================
