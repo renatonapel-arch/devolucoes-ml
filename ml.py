@@ -455,7 +455,9 @@ def build_aguardando(force=False, max_idade_min=30):
 
 def buscar(code, force_ml=False):
     """Acha a devolução por qualquer ID. Primeiro na lista (inclui rastreio dos Correios
-    AP…BR e todos os shipment_ids/claim_id/etc), depois ao vivo no ML."""
+    AP…BR e todos os shipment_ids/claim_id/etc), depois na tabela `entradas` (devoluções
+    ja bipadas, cobre casos em que o claim ja saiu da lista 'a caminho'), depois ao vivo
+    no ML."""
     code = (code or "").strip()
     if not code:
         return {"found": False, "reason": "vazio"}
@@ -472,6 +474,15 @@ def buscar(code, force_ml=False):
         for sid in (it.get("shipment_ids") or []):   # todos os envios da devolução
             if str(sid).upper() == up:
                 return {"found": True, "in_list": True, "by": "shipment_id", "item": it}
+    # tabela `entradas`: devoluções ja bipadas na doca — cobre casos em que o claim ja
+    # saiu da lista 'a caminho' (status closed no ML). Se a devolução foi bipada, o
+    # order_id canonico ja esta gravado; usa ele pra construir o item ao vivo.
+    with _lock:
+        e = _db.execute("SELECT order_id FROM entradas WHERE upper(codigo)=? AND order_id IS NOT NULL ORDER BY id DESC LIMIT 1", (up,)).fetchone()
+    if e and e["order_id"]:
+        it = build_item(str(e["order_id"]))
+        if it:
+            return {"found": True, "in_list": False, "by": "entrada", "item": it}
     if not force_ml:
         return {"found": False, "in_list": False, "code": code}
 
