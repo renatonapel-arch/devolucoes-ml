@@ -987,6 +987,19 @@ def visao_entradas(max_itens=500):
                 d["conf_status"] = compute_status(reg)
                 d["conf_prog"] = _progresso(reg)
                 d["conf_atualizada"] = reg.get("atualizado_em")
+                # sinais de divergência (filtro do gestor): abertura com desfecho != 'certo'
+                # ou chegada com menos volumes que o esperado
+                et = reg.get("etapas") or {}
+                d["desfecho"] = ((et.get("abertura") or {}).get("desfecho") or None)
+                ch = et.get("chegada") or {}
+                if ch.get("feito") and (ch.get("recebidos") or 0) < (ch.get("vol_total") or 1):
+                    d["chegada_divergente"] = True
+                    d["chegada_recebidos"] = ch.get("recebidos") or 0
+                    d["chegada_esperado"] = ch.get("vol_total") or 1
+                d["divergencia"] = bool(
+                    d.get("desfecho") in ("avariado","trocado","faltando","vazio")
+                    or d.get("chegada_divergente")
+                )
                 with _lock:
                     ur = _db.execute("SELECT updated_at FROM conferencias WHERE order_id=?", (str(oid),)).fetchone()
                 ts_fim = (ur["updated_at"] if ur else None) or agora

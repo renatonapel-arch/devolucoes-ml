@@ -635,14 +635,25 @@ async function renderEntradas(){
 function renderEntFiltros(){
   const pend=ENT_ITENS.filter(e=>e.conf_status!=="concluida").length;
   const concl=ENT_ITENS.filter(e=>e.conf_status==="concluida").length;
-  const opts=[["pendentes","Em conferência + não iniciados",pend],["concluidos","Concluídos",concl],["todos","Todos",ENT_ITENS.length]];
+  const div=ENT_ITENS.filter(e=>e.divergencia).length;
+  const opts=[
+    ["pendentes","Em conferência + não iniciados",pend],
+    ["divergencia","Com divergência",div],
+    ["concluidos","Concluídos",concl],
+    ["todos","Todos",ENT_ITENS.length],
+  ];
   document.getElementById("ent-filters").innerHTML=opts.map(([k,l,n])=>
     `<button class="${filtroEnt===k?'on':''}" onclick="setFiltroEnt('${k}')">${l} <b>${n}</b></button>`).join("");
 }
 function setFiltroEnt(k){ filtroEnt=k; renderEntFiltros(); renderEntLista(); }
 function renderEntLista(){
   const el=document.getElementById("entradas-body");
-  const filt=e=>filtroEnt==="todos"?true:filtroEnt==="concluidos"?e.conf_status==="concluida":e.conf_status!=="concluida";
+  const filt=e=>{
+    if(filtroEnt==="todos") return true;
+    if(filtroEnt==="concluidos") return e.conf_status==="concluida";
+    if(filtroEnt==="divergencia") return !!e.divergencia;
+    return e.conf_status!=="concluida";
+  };
   const itens=ENT_ITENS.filter(filt);
   if(!ENT_ITENS.length){ el.innerHTML='<div class="loading">Nenhuma entrada registrada ainda. As bipadas de chegada da doca aparecem aqui.</div>'; return; }
   if(!itens.length){ el.innerHTML='<div class="loading">Nenhuma entrada neste filtro.</div>'; return; }
@@ -668,12 +679,21 @@ function renderEntLista(){
       }
       else st=`<span class="pill p-ok">${svg("i-check")}concluída em ${fmtH(e.horas_para_concluir||0)}</span>`;
       const clickable = e.order_id && e.conf_status !== "nao_identificada";
+      const DESF_LBL={avariado:"avariado",trocado:"trocado / não é nosso",faltando:"faltando peças",vazio:"caixa vazia"};
+      let divPill = "";
+      if(e.divergencia){
+        const txt = e.chegada_divergente
+          ? `chegada incompleta ${e.chegada_recebidos||0}/${e.chegada_esperado||1}`
+          : (DESF_LBL[e.desfecho] || "divergência");
+        divPill = `<span class="pill p-err" title="${txt}">${svg("i-alert")}${txt}</span>`;
+      }
       return `<div class="row-line" ${clickable?`style="cursor:pointer" onclick="openConfDetail('${e.order_id}')"`:""}>
         <span class="pill p-navy mono" style="flex:0 0 auto">${(e.em||"").slice(11)}</span>
         <div style="flex:1;min-width:0">
           <div class="prod-mini">${e.produto||e.codigo}</div>
           <div class="meta">${e.comprador?e.comprador+" · ":""}bipado por ${e.nome||"?"}</div>
         </div>
+        ${divPill}
         ${st}
       </div>`;
     }).join("")}`;
