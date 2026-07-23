@@ -200,6 +200,33 @@ def entrada_page():
     return FileResponse(os.path.join(APP_DIR, "static", "entrada.html"), headers=NO_CACHE)
 
 
+CLAVIS_API_URL = os.environ.get("CLAVIS_API_URL", "https://clavis.napel.com.br/api/v1")
+
+
+@app.get("/sso/clavis")
+def sso_clavis(token: str = "", request: Request = None):
+    """Recebe token SSO do Clavis (padrão docuseal): troca por {user_id, email, name, role}
+    via GET {CLAVIS_API_URL}/sso/verify/{token}, e redireciona pra '/' com o nome/role em
+    query string — o front (index.html / gestor.html) detecta e grava em localStorage
+    ('conf_user'), sem precisar de cookie/sessão."""
+    from fastapi.responses import RedirectResponse
+    import urllib.parse, urllib.request, urllib.error, json as _json
+    if not token:
+        return RedirectResponse("/?sso_err=sem_token", status_code=302)
+    try:
+        with urllib.request.urlopen(f"{CLAVIS_API_URL}/sso/verify/{token}", timeout=15) as r:
+            data = _json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        return RedirectResponse(f"/?sso_err=verify_{e.code}", status_code=302)
+    except Exception:
+        return RedirectResponse("/?sso_err=verify_net", status_code=302)
+    nome = (data.get("name") or "").strip() or (data.get("email") or "Clavis")
+    role = (data.get("role") or "").strip() or "conferente"
+    perfil = "gestor" if role in ("admin", "gerente", "gestor") else "conferente"
+    qs = urllib.parse.urlencode({"sso_nome": nome, "sso_perfil": perfil})
+    return RedirectResponse(f"/?{qs}", status_code=302)
+
+
 NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
 
 

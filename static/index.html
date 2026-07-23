@@ -892,6 +892,19 @@ function buildExamples(){
 
 /* ===== CONFERÊNCIA / AVARIA ===== */
 /* ===== LOGIN ===== */
+(function ssoClavisCapture(){
+  // Captura sso_nome/sso_perfil (vem do redirect /sso/clavis) e salva como conf_user;
+  // depois limpa a URL pra nao vazar em share/histórico.
+  try{
+    const p = new URLSearchParams(location.search);
+    const nome = (p.get("sso_nome")||"").trim();
+    const perfil = (p.get("sso_perfil")||"").trim();
+    if(nome && (perfil==="gestor"||perfil==="conferente"||perfil==="fiscal"||perfil==="estoquista")){
+      localStorage.setItem("conf_user", JSON.stringify({nome, perfil}));
+      history.replaceState(null, "", location.pathname);
+    }
+  }catch(e){}
+})();
 function getUser(){ try{return JSON.parse(localStorage.getItem("conf_user")||"null");}catch(e){return null;} }
 function requireUser(){ const u=getUser(); if(!u){ trocarUsuario(); return null;} return u; }
 let _perfilSel=null;
