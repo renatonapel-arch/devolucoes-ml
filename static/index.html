@@ -19,16 +19,8 @@
     --shadow:0 1px 2px rgba(16,24,40,.05),0 10px 30px rgba(16,24,40,.10);
   }
   *{box-sizing:border-box}
-  body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;background:linear-gradient(180deg,#e7ebf3,#dfe4ee);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased}
-  .page{max-width:1180px;margin:0 auto;padding:26px 20px 60px;display:grid;grid-template-columns:430px 1fr;gap:34px;align-items:start}
-  @media(max-width:980px){.page{grid-template-columns:1fr;justify-items:center}}
-
-  /* ===== PHONE ===== */
-  .phone-wrap{position:sticky;top:26px;justify-self:center}
-  .phone{width:390px;height:800px;background:#0b1220;border-radius:46px;padding:13px;box-shadow:0 30px 70px rgba(8,15,30,.45),inset 0 0 0 2px #222c3f;position:relative}
-  .notch{position:absolute;top:13px;left:50%;transform:translateX(-50%);width:150px;height:26px;background:#0b1220;border-radius:0 0 18px 18px;z-index:30}
-  .screen{width:100%;height:100%;background:var(--bg);border-radius:34px;overflow:hidden;position:relative;display:flex;flex-direction:column}
-  .status-bar{height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600;color:#fff;background:var(--brand-d)}
+  html,body{margin:0;height:100%;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  .screen{max-width:520px;margin:0 auto;min-height:100vh;background:var(--bg);position:relative;display:flex;flex-direction:column}
   .modebanner{padding:6px 12px;font-size:11.5px;font-weight:800;text-align:center;letter-spacing:.3px}
   .modebanner.teste{background:#fff4e0;color:#92400e;border-bottom:1px solid #f3dcb6}
   .modebanner.real{background:#fdecec;color:#991b1b;border-bottom:1px solid #f6cccc}
@@ -301,15 +293,8 @@
 <script src="/static/html5-qrcode.min.js"></script>
 </head>
 <body>
-<div class="page">
-
-  <!-- ===================== PHONE ===================== -->
-  <div class="phone-wrap">
-    <div class="phone">
-      <div class="notch"></div>
-      <div class="screen">
-        <div class="status-bar"><span>9:41</span><span>📶 🔋 100%</span></div>
-        <div id="modebanner" class="modebanner" style="display:none"></div>
+<div class="screen">
+  <div id="modebanner" class="modebanner" style="display:none"></div>
 
         <!-- ======= LOGIN ======= -->
         <div id="login" class="login-bg" style="display:none">
@@ -404,79 +389,6 @@
           </div>
         </div>
 
-      </div>
-    </div>
-  </div>
-
-  <!-- ===================== RIGHT EXPLAINER ===================== -->
-  <div class="panel">
-    <h2>Devoluções ML — Recebimento no Galpão</h2>
-    <p class="sub"><b style="color:var(--ok)">● AO VIVO</b> · Fase 1 (só leitura). A lista vem direto da API do ML — bipe uma etiqueta real e ache a devolução. Nenhuma escrita no ML.</p>
-
-    <div class="pcard">
-      <h3>🔄 O fluxo que você descreveu</h3>
-      <div class="flow">
-        <div class="step"><div class="n">1</div><div class="c"><b>Lista do que está voltando</b><p>Todas as devoluções com o produto a caminho (hoje 13). Atualiza sozinho — some quando recebida.</p></div></div>
-        <div class="step"><div class="n">2</div><div class="c"><b>Funcionário bipa a etiqueta</b><p>Código de barras, QR ou digita qualquer ID. O sistema testa <b>todos</b> os tipos de ID até achar.</p></div></div>
-        <div class="step"><div class="n">3</div><div class="c"><b>Não está na lista? Busca no ML</b><p>Se o código não bater com nenhuma em trânsito, consulta a API do ML e traz mesmo assim.</p></div></div>
-        <div class="step"><div class="n">4</div><div class="c"><b>Ficha completa e organizada</b><p>Máximo de dados da devolução agrupados pra leitura rápida + ação de recebimento que alimenta o pipe.</p></div></div>
-      </div>
-    </div>
-
-    <div class="pcard">
-      <h3>🔑 Os IDs que a etiqueta pode trazer</h3>
-      <ul class="keylist">
-        <li><span class="kc">2000…</span><div><b>Nº da venda</b> (order/pack) — o número grande impresso</div></li>
-        <li><span class="kc">552…</span><div><b>Claim ID</b> — a chave-raiz da devolução no ML</div></li>
-        <li><span class="kc">47…</span><div><b>Cód. envio</b> Mercado Envios — o código de barras de cima</div></li>
-        <li><span class="kc">AP…BR</span><div><b>Rastreio Correios</b> (etiqueta kraft) — ou códigos de outras transportadoras</div></li>
-        <li><span class="kc">MLB…</span><div><b>Cód. do anúncio</b> — fallback extra</div></li>
-      </ul>
-      <div class="note" style="margin-top:12px">Como cada etiqueta usa um número diferente, a busca varre os 5 ao mesmo tempo. <b>Bipou → achou</b>, não importa a transportadora.</div>
-    </div>
-
-    <div class="pcard">
-      <h3>🎯 Destino: o produto vem mesmo pra você?</h3>
-      <p style="margin:0 0 8px;font-size:12.5px;color:var(--muted)">A API revela algo que a etiqueta esconde — pra onde o pacote vai:</p>
-      <div class="legend">
-        <span><i class="dot" style="background:var(--brand)"></i> <b>🔵 Seu galpão (Maringá)</b> — chega e você bipa</span>
-        <span><i class="dot" style="background:var(--ok)"></i> <b>🟢 CD do ML (Cajamar)</b> — fica no ML, você não recebe</span>
-      </div>
-      <div class="note" style="margin-top:12px">Dos 13 de hoje: <b>6 vêm pro seu galpão</b>, <b>5 vão pro CD do ML</b>, 2 são não-entrega voltando. O painel já avisa quais esperar de fato.</div>
-    </div>
-
-    <div class="pcard">
-      <h3>🆕 3 automações que você pediu (1, 4 e 7)</h3>
-      <ul class="keylist">
-        <li><span class="kc">⏱️ 1</span><div><b>Cronômetro de contestação</b> — cada ficha mostra até quando dá pra reclamar avaria (3 dias úteis no seu galpão, 60 no CD). Passou, o prejuízo é seu.</div></li>
-        <li><span class="kc">💸 4</span><div><b>Guardião do reembolso</b> — soma o dinheiro já devolvido sem produto de volta (hoje <b style="color:var(--danger)">R$ 1.461,71</b>), mostra há quantos dias está aberto e, passando de 14 dias, abre "não recebido" no ML sozinho.</div></li>
-        <li><span class="kc">🔁 7</span><div><b>Reincidência do comprador</b> — quantas compras/devoluções ele já teve. Dado real: <b>10 dos 13 são 1ª compra já devolvendo</b>; NATHAN_AMARAL tem 3 compras (recorrente — trate bem).</div></li>
-      </ul>
-      <div class="note" style="margin-top:12px">Tudo com <b>dado real</b> dos 13 de hoje — histórico de cada comprador puxado da API do ML.</div>
-    </div>
-
-    <div class="pcard">
-      <h3>📸 Conferência com prova (novo)</h3>
-      <div class="flow">
-        <div class="step"><div class="n">1</div><div class="c"><b>Prova de chegada — antes de abrir</b><p>Fotos/vídeo do volume <b>lacrado</b>, do jeito que chegou. Trava: só abre depois de registrado.</p></div></div>
-        <div class="step"><div class="n">2</div><div class="c"><b>Abrir e checar avaria</b><p>Conferente abre e marca: sem avaria ✔ ou com avaria ⚠.</p></div></div>
-        <div class="step"><div class="n">3</div><div class="c"><b>Prova da avaria → ML</b><p>Fotos do dano. A IA <b>sugere a mensagem</b>; o conferente revisa e <b>aprova</b>.</p></div></div>
-        <div class="step"><div class="n">4</div><div class="c"><b>Envio automático ao Mercado Livre</b><p>Ao aprovar, o app sobe as fotos e abre a reclamação de avaria sozinho.</p></div></div>
-      </div>
-    </div>
-
-    <div class="pcard">
-      <h3>✅ A API do ML permite (confirmado na doc)</h3>
-      <ul class="keylist">
-        <li><span class="kc">POST</span><div>Subir provas: <code>/claims/{id}/attachments</code> — <b>≤5MB</b>, JPG/PNG/PDF</div></li>
-        <li><span class="kc">SRF2</span><div>Motivo oficial <b>"produto chegou avariado"</b> na revisão da devolução</div></li>
-        <li><span class="kc">msg</span><div>Mensagem + anexos juntos (ação <code>send_attachments</code>)</div></li>
-      </ul>
-      <div class="note" style="margin-top:12px"><b>Ressalva:</b> envio automático só vale para devolução que vem pro <b>🔵 seu galpão</b> e tem revisão disponível na janela do ML. As <b>🟢 do CD</b> o ML revisa sozinho — não há o que enviar.</div>
-    </div>
-
-    <p class="tip">📱 Mockup mobile clicável — abra uma ficha 🔵, registre as provas, marque avaria e teste o envio ao ML. Me diga o que muda.</p>
-  </div>
 </div>
 
 <script>
