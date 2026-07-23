@@ -14,6 +14,23 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 app = FastAPI(title="Devoluções ML — Recebimento (Fase 1, leitura)")
 
 
+@app.middleware("http")
+async def redirect_demos_to_prod(request: Request, call_next):
+    """Redirect 301 permanente: *.devolucoes.demos.napel.com.br -> *.devolucoes.napel.com.br
+    Bookmark antigo abre a URL nova sozinho, mantendo path+query. Migração invisível pro
+    usuário; depois de X semanas o domínio demo pode ser removido do Coolify sem quebrar
+    ninguém. Ativa/desativa via env DEVOL_REDIRECT_DEMOS (default '1' = ligado)."""
+    from fastapi.responses import RedirectResponse
+    import os as _os
+    if _os.environ.get("DEVOL_REDIRECT_DEMOS", "1") == "1":
+        host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").lower()
+        if ".demos.napel.com.br" in host:
+            novo = host.replace(".demos.napel.com.br", ".napel.com.br")
+            url = str(request.url).replace(f"://{host}", f"://{novo}", 1)
+            return RedirectResponse(url, status_code=301)
+    return await call_next(request)
+
+
 @app.on_event("startup")
 def _aquecer_cache():
     # Após um redeploy o container é novo (cache frio). Sem aquecer, o 1º conferente
