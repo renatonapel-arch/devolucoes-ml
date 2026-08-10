@@ -502,6 +502,17 @@ def buscar(code, force_ml=False):
         it = build_item(oid)
         if it:
             return {"found": True, "in_list": False, "by": "ml", "item": it}
+        # nº 2000… tambem pode ser PACK_ID (carrinho: N pedidos sob 1 etiqueta só). Nesse caso
+        # /orders/{code} responde 404 "Order do not exists" e só /packs/{code} resolve — de lá
+        # sai o order_id real. Provado 10/08 com o pack 2000014125427389 (o painel do ML e a
+        # etiqueta mostram o pack; a API de pedidos não conhece esse número).
+        pedidos = ((g(f"/packs/{code}") or {}).get("orders") or [])
+        if len(pedidos) > 1:
+            dbg(f"PACK {code} tem {len(pedidos)} pedidos — retornando o 1o que monta")
+        for po in pedidos:
+            it = build_item(str(po.get("id")))
+            if it:
+                return {"found": True, "in_list": False, "by": "pack", "item": it}
     return {"found": False, "in_list": False, "code": code,
             "hint": "Sem resultado por esse código. Tente o nº da venda (2000…), o cód. de envio (47…), o rastreio dos Correios (AP…BR) ou o nome do produto."}
 
