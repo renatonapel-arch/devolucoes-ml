@@ -513,6 +513,15 @@ function kvMatch(k,v,mono,matched){
 let FICHA = {d:null, by:null, conf:null, view:"resumo", step:0, hero:"", blocks:""};
 async function openFicha(i, by){ return renderFicha(DADOS[i], by); }
 async function renderFicha(d, by){
+  // Devoluções que já saíram da lista "a caminho" (ex: chegou/CD revisou) reaparecem via um
+  // SNAPSHOT gravado na 1ª vez que a ficha foi tocada — pode estar velho (ex: "vai pro CD"
+  // congelado de quando ainda estava a caminho, mesmo já tendo sido encaminhado ao galpão
+  // depois). Revalida contra o ML AGORA, antes de decidir se bloqueia a conferência.
+  try{
+    const r = await fetch("/api/buscar?code="+encodeURIComponent(d.order_id)+"&ml_fallback=1");
+    const j = await r.json();
+    if(j && j.found && j.item){ d = {...d, ...j.item}; }
+  }catch(e){}
   FICHA.d=d; FICHA.by=by; FICHA.view="resumo"; FICHA.step=0;
   CONF = {chegada:[], chegadaFalhou:[], produto:[], avaria:[], claim_id:d.claim_id, order_id:d.order_id};
   try{ FICHA.conf = await (await fetch("/api/conferencia/"+encodeURIComponent(d.order_id))).json(); }

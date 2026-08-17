@@ -856,7 +856,21 @@ def get_conferencia(oid, item=None):
 
 def save_etapa(oid, etapa, dados, perfil, nome, item=None):
     with _lock:
-        reg = _get_reg(oid) or (_novo(item) if item else None)
+        reg = _get_reg(oid)
+        if reg is None:
+            reg = _novo(item) if item else None
+        elif item:
+            # self-heal: o snapshot (reg["snapshot"]) fica CONGELADO desde o 1º toque na ficha
+            # (claim_lock ou este save) — se o pedido saiu do "a caminho" pro CD e depois foi
+            # encaminhado ao galpão (2ª perna seller_address), o snapshot antigo continua
+            # dizendo destino=warehouse pra sempre, e a lista() usa esse snapshot congelado pra
+            # reexibir conferências que sumiram da lista ao vivo. O front manda o item ATUAL em
+            # toda etapa — usa pra manter os campos voláteis frescos, sem precisar de fetch extra.
+            for k in ("destino", "fase", "local", "claim_status", "status_money", "tracking"):
+                if item.get(k) is not None:
+                    reg.setdefault("snapshot", {})[k] = item[k]
+                    if k in ("destino", "fase"):
+                        reg[k] = item[k]
         if reg is None:
             return {"erro": "item desconhecido"}
         dados = dict(dados or {})
