@@ -260,6 +260,26 @@ def build_item(oid, origem="devolucao"):
                 o["_ret_track"] = track
                 break
 
+        # fallback: mediação FECHADA sem nenhum objeto de devolução no ML (comprador manda o
+        # produto de volta por conta própria — sem etiqueta Mercado Envios, sem "return"
+        # atrelado ao claim). Confirmado ao vivo (ticket 0051, 25/08): claim 5558202494 tem
+        # resolution.applied_coverage=true e related_entities=[] — o ML nunca soube desse
+        # envio. Sem isso, essa devolução NUNCA aparece em lugar nenhum do app (nem lista, nem
+        # busca), mesmo com o pacote físico na mão do conferente e o nº da venda em punho.
+        if claim_id is None:
+            cid = meds[-1]
+            c = g(f"/post-purchase/v1/claims/{cid}") or {}
+            if c.get("status") == "closed":
+                claim_id = str(cid)
+                claim_type = c.get("type")
+                claim_status = c.get("status")
+                reason_id = c.get("reason_id")
+                res = c.get("resolution") or {}
+                status_money = "refunded" if "complainant" in (res.get("benefited") or []) else "retained"
+                dev_aberta = (c.get("date_created") or "")[:10] or None
+                fase = "delivered"           # o pacote já chegou fisicamente — por isso dá pra bipar
+                destino = "seller_address"   # comprador mandou direto p/ Napel, sem passar pelo CD do ML
+
     if fase is None:
         return None  # não está voltando (já chegou / encerrado)
 
