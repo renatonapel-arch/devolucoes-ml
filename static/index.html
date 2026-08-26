@@ -847,7 +847,7 @@ function renderUserChip(){ const u=getUser(); const el=document.getElementById("
 
 /* ===== CONFERÊNCIA (multi-etapa, persistente) ===== */
 let CONF = {chegada:[], chegadaFalhou:[], produto:[], avaria:[], claim_id:null, order_id:null};
-function rotuloDesf(x){return {certo:"✅ Certo / perfeito",avariado:"⚠️ Avariado",trocado:"🔄 Trocado / golpe",faltando:"📉 Faltando peças",vazio:"📦 Caixa vazia"}[x]||x||"—";}
+function rotuloDesf(x){return {certo:"✅ Certo / perfeito",avariado:"⚠️ Avariado",trocado:"🔄 Trocado / golpe",faltando:"📉 Faltando peças",vazio:"📦 Caixa vazia",garantia:"🛡️ Garantia (fornecedor)"}[x]||x||"—";}
 function rotuloEstoque(x){return {volta:"📥 Voltou ao estoque",descarte:"🗑 Descartado",retido:"🔒 Retido como prova"}[x]||"—";}
 function etapaWrap(n, titulo, done, body){
   return `<div class="etapa ${done?'done':''}"><div class="eh"><span class="en">${done?'✓':n}</span>${titulo}</div><div class="eb">${body}</div></div>`;
@@ -926,7 +926,8 @@ function stepBody(key,d,et){
       <button class="desf" onclick="salvarAbertura('avariado')">⚠️ Avariado</button>
       <button class="desf" onclick="salvarAbertura('trocado')">🔄 Trocado / não é o nosso (golpe)</button>
       <button class="desf" onclick="salvarAbertura('faltando')">📉 Faltando peças</button>
-      <button class="desf" onclick="salvarAbertura('vazio')">📦 Caixa vazia</button></div>`;
+      <button class="desf" onclick="salvarAbertura('vazio')">📦 Caixa vazia</button>
+      <button class="desf" onclick="salvarAbertura('garantia')">🛡️ Garantia (fornecedor)</button></div>`;
   }
   if(key==="reclamacao_ml"){ const rc=et.reclamacao_ml||{};
     if(rc.enviado && (!rc.resultado||rc.resultado==="aguardando")) return `<div class="donebadge" style="background:var(--brand-soft);color:var(--brand-d)">🔵 Aguardando resposta do ML · enviado por ${rc.nome||"?"} · ${rc.em||""}</div>

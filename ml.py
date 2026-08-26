@@ -1042,7 +1042,7 @@ def visao_entradas(max_itens=500):
                     d["chegada_recebidos"] = ch.get("recebidos") or 0
                     d["chegada_esperado"] = ch.get("vol_total") or 1
                 d["divergencia"] = bool(
-                    d.get("desfecho") in ("avariado","trocado","faltando","vazio")
+                    d.get("desfecho") in ("avariado","trocado","faltando","vazio","garantia")
                     or d.get("chegada_divergente")
                 )
                 with _lock:

@@ -546,7 +546,7 @@ function renderHist(){
 
 // ===== Modal detalhe =====
 const ETLBL={chegada:"Prova de chegada",abertura:"Abrir e avaliar",reclamacao_ml:"Reclamação no ML",nf_devolucao:"NF de devolução (SIGE)",compensacao:"Compensação (SIGE)",estoque:"Estoque"};
-const DESFLBL={certo:"Certo / perfeito",avariado:"Avariado",trocado:"Trocado / golpe",faltando:"Faltando peças",vazio:"Caixa vazia"};
+const DESFLBL={certo:"Certo / perfeito",avariado:"Avariado",trocado:"Trocado / golpe",faltando:"Faltando peças",vazio:"Caixa vazia",garantia:"Garantia (fornecedor)"};
 
 function etDetail(key,e){
   if(key==="abertura"&&e.desfecho) return "Estado: "+(DESFLBL[e.desfecho]||e.desfecho);
@@ -679,7 +679,7 @@ function renderEntLista(){
       }
       else st=`<span class="pill p-ok">${svg("i-check")}concluída em ${fmtH(e.horas_para_concluir||0)}</span>`;
       const clickable = e.order_id && e.conf_status !== "nao_identificada";
-      const DESF_LBL={avariado:"avariado",trocado:"trocado / não é nosso",faltando:"faltando peças",vazio:"caixa vazia"};
+      const DESF_LBL={avariado:"avariado",trocado:"trocado / não é nosso",faltando:"faltando peças",vazio:"caixa vazia",garantia:"garantia (fornecedor)"};
       let divPill = "";
       if(e.divergencia){
         const txt = e.chegada_divergente
