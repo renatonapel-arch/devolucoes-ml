@@ -882,7 +882,45 @@ def get_conferencia(oid, item=None):
     return reg
 
 
+# Tipos de credito do SIGE — MESMA lista do modulo nativo Clavis `devolucao_venda`
+# (backend/app/modules/devolucao_venda/models.py:38). Espelhado de proposito: a Napel ja
+# trabalha com esses 3 codigos na devolucao de venda normal, nao inventar codigo novo aqui.
+TIPOS_CREDITO_SIGE = {
+    "337": "337 · NFL (nota própria)",
+    "339": "339 · NFE (nota do cliente)",
+    "367": "367 · RDV (sem nota)",
+}
+
+
+def _valida_nf_devolucao(dados):
+    """Trava do ticket 0107 (Hudson): sem registrar o credito do SIGE a etapa NAO fecha.
+    Antes era so um botao '✔ feito no SIGE' — dava pra concluir a conferencia inteira sem
+    ter lancado nada no SIGE, e o card aparecia 'concluida' pra todo mundo (caso real: a
+    Natalia achou que tinha feito, nao tinha, e o Clavis mostrava concluida).
+    Mesma regra do modulo nativo (`devolucao_venda/service.py:151 pode_concluir`): exige
+    tipo do credito + valor. Aqui exige tambem o numero do documento, que e o que a
+    conferente tem na mao ao lancar no SIGE (o Hudson pediu esse digitado como trava
+    minima quando nao houver consulta automatica na ponte do SIGE)."""
+    tipo = str(dados.get("tipo_credito") or "").strip()
+    doc = str(dados.get("doc_sige") or "").strip()
+    valor = dados.get("valor_credito")
+    if tipo not in TIPOS_CREDITO_SIGE:
+        return "Escolha o tipo do crédito no SIGE (337 NFL, 339 NFE ou 367 RDV)."
+    if not doc:
+        return "Digite o número do documento lançado no SIGE."
+    try:
+        if valor in (None, "") or float(valor) <= 0:
+            return "Digite o valor do crédito/reembolso lançado no SIGE."
+    except (TypeError, ValueError):
+        return "Valor do crédito inválido."
+    return None
+
+
 def save_etapa(oid, etapa, dados, perfil, nome, item=None):
+    if etapa == "nf_devolucao" and (dados or {}).get("feito", True):
+        erro = _valida_nf_devolucao(dados or {})
+        if erro:
+            return {"erro": erro}
     with _lock:
         reg = _get_reg(oid)
         if reg is None:

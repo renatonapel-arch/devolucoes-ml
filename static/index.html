@@ -526,6 +526,10 @@ async function renderFicha(d, by){
   CONF = {chegada:[], chegadaFalhou:[], produto:[], avaria:[], claim_id:d.claim_id, order_id:d.order_id};
   try{ FICHA.conf = await (await fetch("/api/conferencia/"+encodeURIComponent(d.order_id))).json(); }
   catch(e){ FICHA.conf = {etapas:{}, status:"nao_iniciada"}; }
+  // fotos ja tiradas — ticket 0107 (Hudson): no historico nao dava pra ver o que foi feito.
+  // Mesmo endpoint que o painel do gestor ja usa.
+  try{ FICHA.anexos = await (await fetch("/api/conferencia/"+encodeURIComponent(d.order_id)+"/anexos")).json(); }
+  catch(e){ FICHA.anexos = []; }
   FICHA.lockWarn = null;
   try{ const u=getUser();
     if(u){ const lk=await (await fetch("/api/conferencia/"+encodeURIComponent(d.order_id)+"/lock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({perfil:u.perfil,nome:u.nome,item:d})})).json();
@@ -866,7 +870,27 @@ function renderResumoConf(){
       ${cur?'<span class="ov-cur">agora</span>':''}</div>`; }).join("");
   const btn = concluida ? `<div class="conf-done-top">✅ Conferência concluída</div>`
     : `<div class="cta"><button class="cta-step" onclick="iniciarConferencia()">${pend===0?'▶ Iniciar conferência':'▶ Continuar — passo '+(pend+1)+' de '+s.length}</button></div>`;
-  return `<div class="block"><div class="bh">📋 Conferência <span class="prog" style="margin-left:auto">${Math.min(pend,s.length)}/${s.length} etapas</span></div><div class="ov-list">${rows}</div></div>${btn}<div style="height:8px"></div>`;
+  return `<div class="block"><div class="bh">📋 Conferência <span class="prog" style="margin-left:auto">${Math.min(pend,s.length)}/${s.length} etapas</span></div><div class="ov-list">${rows}</div></div>${btn}${renderFotosConf()}<div style="height:8px"></div>`;
+}
+// Fotos ja registradas nesta conferencia (ticket 0107). Agrupadas pelo tipo, igual ao gestor.
+function renderFotosConf(){
+  const ax = FICHA.anexos||[];
+  if(!ax.length) return "";
+  const LBL={chegada:"📸 Provas de chegada",produto:"🔍 Produto após abrir",avaria:"⚠️ Provas de avaria"};
+  const grupos={}; ax.forEach(a=>{ (grupos[a.tipo]=grupos[a.tipo]||[]).push(a); });
+  const secoes=Object.entries(grupos).map(([tipo,arr])=>`
+    <div style="margin-top:10px">
+      <div style="font-size:11.5px;font-weight:800;color:var(--muted);margin-bottom:6px">${LBL[tipo]||tipo} · ${arr.length}</div>
+      <div class="photogrid">${arr.map(a=>`<img src="${a.data}" style="aspect-ratio:1;width:100%;object-fit:cover;border-radius:11px;cursor:zoom-in" onclick="verFotoConf(this.src)">`).join("")}</div>
+    </div>`).join("");
+  return `<div class="block"><div class="bh">🖼 Fotos da conferência</div><div style="padding:0 2px 4px">${secoes}</div></div>`;
+}
+function verFotoConf(src){
+  const o=document.createElement("div");
+  o.style.cssText="position:fixed;inset:0;background:rgba(6,12,24,.92);z-index:999;display:flex;align-items:center;justify-content:center;padding:14px";
+  o.onclick=()=>o.remove();
+  o.innerHTML=`<img src="${src}" style="max-width:100%;max-height:100%;border-radius:12px">`;
+  document.body.appendChild(o);
 }
 function renderStep(){
   const s=stepsList(); let i=FICHA.step; if(i<0)i=0; if(i>=s.length)i=s.length-1;
@@ -884,6 +908,11 @@ function stepDoneTxt(key,et){ const e=et[key]||{};
   if(key==="reclamacao_ml") return `Reclamação: <b>${e.resultado==="ganhamos"?"✔ ganhamos":"✘ perdemos"}</b><br>✓ ${e.nome||""} · ${e.em||""}`;
   if(key==="estoque") return `${rotuloEstoque(e.destino)} · local <b>${e.local||"—"}</b><br>✓ ${e.nome||""} · ${e.em||""}`;
   if(key==="compensacao") return `${e.compensou?"Compensado com a venda no SIGE":"Sem compensação (não se aplica)"}<br>✓ ${e.nome||""} · ${e.em||""}`;
+  if(key==="nf_devolucao"){
+    const t=e.tipo_credito?({"337":"337 · NFL","339":"339 · NFE","367":"367 · RDV"}[e.tipo_credito]||e.tipo_credito):null;
+    const extra = t? `${t} · doc <b>${e.doc_sige||"—"}</b> · ${money(e.valor_credito||0)}<br>` : "";
+    return `${extra}✓ ${e.nome||""} · ${e.em||""}`;
+  }
   if(key==="chegada"){ const nv=(e.recebidos||1); return `${nv} volume(s) recebido(s) · ✓ ${e.nome||""} · ${e.em||""}`; }
   return `✓ ${e.nome||""} · ${e.perfil||""} · ${e.em||""}`;
 }
@@ -948,9 +977,16 @@ function stepBody(key,d,et){
       </div>`;
   }
   if(key==="nf_devolucao"){
-    return `<div class="sige-note">⚠️ Feito na <b>tela do SIGE</b> — o app não escreve no SIGE. Faça lá e confirme aqui.</div>
+    return `<div class="sige-note">⚠️ Feito na <b>tela do SIGE</b> — o app não escreve no SIGE. Lance lá e registre aqui o que lançou.</div>
       <div class="cs-desc">Emita a NF de devolução no SIGE <small>(o lançamento financeiro sai automático dela).</small></div>
-      <div class="cta"><button class="cta-step feito-btn" onclick="salvarSige('${key}')">✔ Feito no SIGE — avançar →</button></div>`; }
+      <div class="cs-desc" style="margin-top:10px;font-weight:800;color:var(--ink)">Tipo do crédito no SIGE:</div>
+      <div class="seg" id="nf-tipo">
+        <button onclick="seg(this,'blue')" data-v="337">337 · NFL</button>
+        <button onclick="seg(this,'blue')" data-v="339">339 · NFE</button>
+        <button onclick="seg(this,'blue')" data-v="367">367 · RDV</button></div>
+      <input class="txt-in" id="nf-doc" inputmode="numeric" placeholder="Nº do documento lançado no SIGE">
+      <input class="txt-in" id="nf-valor" inputmode="decimal" placeholder="Valor do crédito/reembolso (ex: 574,74)">
+      <div class="cta"><button class="cta-step feito-btn" onclick="salvarSige('${key}')">✔ Lancei no SIGE — avançar →</button></div>`; }
   if(key==="compensacao"){ const sm=FICHA.d.status_money;
     const hint = sm==="refunded"?'<b>O ML já reembolsou</b> o comprador.':(sm==="retained"?'O dinheiro está <b>retido</b> no ML.':'');
     return `<div class="sige-note">⚠️ Decisão feita na <b>tela do SIGE</b> — o app não escreve no SIGE.</div>
@@ -1152,7 +1188,24 @@ async function marcarFeitoNoML(etapa, descricao){
   if(!r||r.__erro) return;
   avancarPasso(r);
 }
-async function salvarSige(key){ if(!requireUser())return; const r=await postEtapa(key,{}); if(!r||r.__erro)return; avancarPasso(r); }
+async function salvarSige(key){
+  if(!requireUser())return;
+  let dados={};
+  if(key==="nf_devolucao"){
+    // trava do ticket 0107: sem registrar o que foi lancado no SIGE a etapa nao fecha.
+    // O backend valida de novo (ml._valida_nf_devolucao) — aqui e so pra avisar na hora.
+    const sel=document.querySelector("#nf-tipo button.on-blue");
+    const tipo=sel?sel.getAttribute("data-v"):null;
+    const doc=((document.getElementById("nf-doc")||{}).value||"").trim();
+    const valorTxt=((document.getElementById("nf-valor")||{}).value||"").trim().replace(/\./g,"").replace(",",".");
+    const valor=parseFloat(valorTxt);
+    if(!tipo){ alert("Escolha o tipo do crédito no SIGE (337 NFL, 339 NFE ou 367 RDV)."); return; }
+    if(!doc){ alert("Digite o nº do documento lançado no SIGE."); return; }
+    if(!valor||valor<=0){ alert("Digite o valor do crédito/reembolso lançado no SIGE."); return; }
+    dados={tipo_credito:tipo, doc_sige:doc, valor_credito:valor};
+  }
+  const r=await postEtapa(key,dados); if(!r||r.__erro)return; avancarPasso(r);
+}
 async function salvarCompensacao(compensou){ if(!requireUser())return; const r=await postEtapa("compensacao",{compensou:!!compensou}); if(!r||r.__erro)return; avancarPasso(r); }
 async function salvarEstoque(){
   if(!requireUser())return;

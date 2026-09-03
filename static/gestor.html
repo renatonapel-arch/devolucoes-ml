@@ -554,6 +554,10 @@ function etDetail(key,e){
   if(key==="reclamacao_ml") return e.resultado&&e.resultado!=="aguardando"?("Resultado: "+(e.resultado==="ganhamos"?"ganhamos":"perdemos")):(e.enviado?"Aguardando resposta do ML":"");
   if(key==="estoque") return (e.destino?({volta:"Voltou ao estoque",descarte:"Descartado",retido:"Retido"}[e.destino]||e.destino):"")+(e.local?(" · local: "+e.local):"");
   if(key==="compensacao") return e.compensou?"Compensado com a venda":"Sem compensação (não se aplica)";
+  if(key==="nf_devolucao"&&e.tipo_credito){
+    const t={"337":"337 · NFL","339":"339 · NFE","367":"367 · RDV"}[e.tipo_credito]||e.tipo_credito;
+    return `${t} · doc ${e.doc_sige||"—"} · ${money(e.valor_credito||0)}`;
+  }
   return "";
 }
 
