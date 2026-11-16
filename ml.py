@@ -1047,8 +1047,7 @@ def lista():
     cont = Counter(i.get("conf_status", "nao_iniciada") for i in itens)
     return {"atualizado": base.get("atualizado"), "total": len(itens), "itens": itens,
             "construindo": bool(base.get("construindo")),
-            "contagem": {k: cont.get(k, 0) for k in ["nao_iniciada", "em_andamento", "aguardando_ml", "concluida"]},
-            "modo": mode()["mode"]}
+            "contagem": {k: cont.get(k, 0) for k in ["nao_iniciada", "em_andamento", "aguardando_ml", "concluida"]}}
 
 
 # =====================================================================
