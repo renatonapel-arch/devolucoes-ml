@@ -24,9 +24,6 @@
   input::placeholder,textarea::placeholder{color:#7DA4C6}
   html,body{margin:0;height:100%;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased;overflow-x:hidden}
   .screen{max-width:520px;margin:0 auto;min-height:100vh;background:var(--bg);position:relative;display:flex;flex-direction:column}
-  .modebanner{padding:6px 12px;font-size:11.5px;font-weight:800;text-align:center;letter-spacing:.3px}
-  .modebanner.teste{background:var(--warn-soft);color:var(--warn);border-bottom:1px solid rgba(251,191,36,.35)}
-  .modebanner.real{background:var(--danger-soft);color:var(--danger-fg);border-bottom:1px solid rgba(248,113,113,.4)}
   /* login */
   .login-bg{position:absolute;inset:0;background:linear-gradient(160deg,var(--card),var(--bg));z-index:60;display:flex;flex-direction:column;justify-content:center;padding:30px 24px;color:var(--ink)}
   .login-bg h2{margin:0 0 4px;font-size:21px}
@@ -297,7 +294,6 @@
 </head>
 <body>
 <div class="screen">
-  <div id="modebanner" class="modebanner" style="display:none"></div>
 
         <!-- ======= LOGIN ======= -->
         <div id="login" class="login-bg" style="display:none">
@@ -1136,7 +1132,8 @@ async function registrarVolume(n, N){
 async function salvarAbertura(desf){
   if(!requireUser()) return;
   // exige ao menos 1 foto do produto ABERTO — vale pra qualquer desfecho (inclusive 'certo')
-  const jaTem = ((((FICHA.conf||{}).etapas||{}).abertura||{}).fotos_produto)||0;
+  // conta tambem fotos do produto ja guardadas (etapa desfeita pelo gestor mantem as fotos — #0313)
+  const jaTem = Math.max(((((FICHA.conf||{}).etapas||{}).abertura||{}).fotos_produto)||0, (FICHA.anexos||[]).filter(a=>a.tipo==="produto").length);
   if((CONF.produto||[]).length + jaTem < 1){
     alert("📸 Tire ao menos 1 foto do produto depois de abrir a embalagem — mesmo que esteja perfeito.");
     return;
@@ -1258,16 +1255,6 @@ async function carregar(refresh){
     _pollTimer = setTimeout(()=>carregar(false), 10000);
   }
 }
-async function initMode(){
-  try{
-    const j = await (await fetch("/api/mode")).json();
-    const b = document.getElementById("modebanner");
-    b.style.display="block";
-    if(j.mode==="real"){ b.className="modebanner real"; b.textContent="🔴 MODO REAL — envios de avaria VÃO para o Mercado Livre"; }
-    else { b.className="modebanner teste"; b.textContent="🧪 MODO TESTE — nada é enviado ao Mercado Livre"; }
-  }catch(e){}
-}
-initMode();
 renderUserChip();
 if(!getUser()) trocarUsuario();
 carregar(false);

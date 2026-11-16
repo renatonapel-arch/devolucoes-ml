@@ -184,6 +184,8 @@ tbody tr:hover{background:var(--sky-bg)}
 .m-head .x:hover{background:var(--bg);color:var(--navy)}
 .m-step{display:flex;gap:14px;padding:14px 22px;border-bottom:1px solid var(--border);align-items:flex-start}
 .m-step:last-of-type{border:0}
+.btn-desfazer{flex:none;align-self:center;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer}
+.btn-desfazer:hover{color:var(--err-fg);border-color:var(--err-fg)}
 .m-ic{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;background:var(--border);color:var(--muted);font-weight:700;font-size:11px}
 .m-step.done .m-ic{background:var(--ok);color:#042C48}
 .m-t{font-weight:600;font-size:13.5px;color:var(--navy-900)}
@@ -575,6 +577,7 @@ async function openConfDetail(oid){
   const ruim=["avariado","trocado","faltando","vazio"].includes((et.abertura||{}).desfecho);
   const order=["chegada","abertura"]; if(ruim)order.push("reclamacao_ml"); order.push("nf_devolucao","compensacao","estoque");
   const cs=CONFST[reg.status]||CONFST.nao_iniciada;
+  const ultima=[...order].reverse().find(k=>et[k]);   // #0313: só a última etapa feita pode ser desfeita
   const steps=order.map(k=>{
     const e=et[k]||{};
     const done=k==="reclamacao_ml"?(e.resultado&&e.resultado!=="aguardando"):!!e.feito;
@@ -583,8 +586,10 @@ async function openConfDetail(oid){
     return `<div class="m-step ${done?'done':''}">
       <div class="m-ic">${done?'✓':'○'}</div>
       <div style="flex:1;min-width:0"><div class="m-t">${ETLBL[k]||k}</div>${det?`<div class="m-d">${det}</div>`:""}<div class="m-who">${who}</div></div>
+      ${k===ultima?`<button class="btn-desfazer" onclick="desfazerEtapa('${oid}','${k}')">↩ Desfazer</button>`:""}
     </div>`;
   }).join("");
+  const desfeitas=(reg.desfeitas||[]).map(x=>`<div>↩ ${ETLBL[x.etapa]||x.etapa} desfeita por ${x.por} · ${x.em}</div>`).join("");
   const TIPOLBL={chegada:"Provas de chegada",produto:"Produto após abrir",avaria:"Provas de avaria"};
   const grupos={}; anexos.forEach(a=>{ (grupos[a.tipo]=grupos[a.tipo]||[]).push(a); });
   const anexosHtml = anexos.length
@@ -607,13 +612,37 @@ async function openConfDetail(oid){
     ${anexosHtml}
     <div style="padding:14px 22px;font-size:11.5px;color:var(--muted);border-top:1px solid var(--border)">
       ${reg.iniciada_por?("Iniciada por "+reg.iniciada_por+" · "):""}${reg.atualizado_em?("atualizada "+reg.atualizado_em):""}
+      ${desfeitas}
     </div>`;
+}
+// #0313 — gestor desfaz a última etapa (fotos ficam guardadas); conferente refaz pelo app.
+function gestorNome(){
+  try{ const u=JSON.parse(localStorage.getItem("gestor_user")||"null"); if(u&&u.nome) return u.nome; }catch(e){}
+  const n=(prompt("Seu nome (fica registrado quem desfez):")||"").trim();
+  if(n){ try{ localStorage.setItem("gestor_user", JSON.stringify({nome:n})); }catch(e){} }
+  return n;
+}
+async function desfazerEtapa(oid, etapa){
+  const nome=gestorNome(); if(!nome) return;
+  if(!confirm(`Desfazer a etapa "${ETLBL[etapa]||etapa}"?\n\nAs fotos ficam guardadas e a conferente refaz a etapa pelo app.`)) return;
+  const post=async(ciente)=>(await fetch("/api/conferencia/"+encodeURIComponent(oid)+"/desfazer",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({etapa, perfil:"gestor", nome, ciente_ml:ciente})})).json();
+  let r=await post(false);
+  if(r.precisa_ciente_ml){
+    if(!confirm("⚠️ ATENÇÃO\n\n"+r.aviso+"\n\nDesfazer mesmo assim?")) return;
+    r=await post(true);
+  }
+  if(r.erro){ alert("Não deu: "+r.erro); return; }
+  openConfDetail(oid);
+  load(false);
 }
 function verFoto(src){
   let o=document.getElementById("lightbox");
   if(!o){ o=document.createElement("div"); o.id="lightbox"; o.className="lightbox"; o.onclick=()=>{o.style.display="none";}; document.body.appendChild(o); }
   o.innerHTML=`<img src="${src}">`; o.style.display="flex";
 }
+(function(){ try{ const p=new URLSearchParams(location.search); const n=(p.get("sso_nome")||"").trim();
+  if(n) localStorage.setItem("gestor_user", JSON.stringify({nome:n})); }catch(e){} })();
 function closeConfDetail(){ document.getElementById("confmodal").style.display="none"; }
 
 function showTab(t){

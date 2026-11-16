@@ -95,6 +95,12 @@ async def post_etapa(oid: str, req: Request):
         return JSONResponse({"erro": "falha ao salvar", "detalhe": str(e)}, status_code=500)
 
 
+@app.post("/api/conferencia/{oid}/desfazer")
+async def post_desfazer(oid: str, req: Request):
+    b = await req.json()
+    return JSONResponse(ml.desfazer_etapa(oid, b.get("etapa"), b.get("perfil"), b.get("nome"), bool(b.get("ciente_ml"))))
+
+
 @app.post("/api/conferencia/{oid}/anexo")
 async def post_anexo(oid: str, req: Request):
     """Sobe UMA foto na hora (POST pequeno) — desacopla o upload do 'Salvar e avançar'."""
@@ -171,11 +177,6 @@ def get_anexos(oid: str):
 @app.get("/api/buscar")
 def buscar(code: str = Query(...), ml_fallback: int = 0):
     return JSONResponse(ml.buscar(code, force_ml=bool(ml_fallback)))
-
-
-@app.get("/api/mode")
-def get_mode():
-    return ml.mode()
 
 
 @app.post("/api/avaria")

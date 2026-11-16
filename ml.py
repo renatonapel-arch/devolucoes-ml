@@ -546,15 +546,10 @@ def buscar(code, force_ml=False):
 
 
 # =====================================================================
-# Fase 2 — modo teste / envio de avaria (TRAVA DE ESCRITA)
-# Por padrão: modo TESTE (nada vai pro ML). Real só com env DEVOL_WRITE=1.
+# Fase 2 — escritas no ML. Cada escrita tem a própria chave de env:
+# DEVOL_AVARIA_OK=1 (reclamação de avaria) e DEVOL_REVIEW_OK=1 ("Já revisei").
+# (A chave geral DEVOL_WRITE / faixa "MODO TESTE" saiu no chamado #0313.)
 # =====================================================================
-WRITE_ENABLED = os.environ.get("DEVOL_WRITE") == "1"
-
-
-def mode():
-    return {"mode": "real" if WRITE_ENABLED else "teste", "write_enabled": WRITE_ENABLED}
-
 
 def test_items():
     """12 devoluções FALSAS — uma por cenário ponta a ponta. O nome diz o que fazer.
@@ -588,7 +583,7 @@ def test_items():
 
 def _with_test(out):
     # Devoluções FALSAS de treino só aparecem se DEVOL_TEST_ITEMS=1 (padrão: OFF).
-    if WRITE_ENABLED or os.environ.get("DEVOL_TEST_ITEMS") != "1":
+    if os.environ.get("DEVOL_TEST_ITEMS") != "1":
         return out
     ti = test_items()
     return {**out, "itens": ti + out.get("itens", []),
@@ -699,9 +694,9 @@ def confirmar_revisao_ok(claim_id):
     (= botão 'Já revisei' → ação return_review_ok), pra não ficar dias em 'Para sua revisão'.
     Endpoint oficial: POST /post-purchase/v1/returns/{RETURN_ID}/return-review com corpo {}.
     Não mexe no dinheiro (reembolso já sai na entrega/envio). Gate próprio: DEVOL_REVIEW_OK=1
-    liga SÓ esta escrita (avaria continua atrás de DEVOL_WRITE)."""
+    liga SÓ esta escrita (avaria fica atrás de DEVOL_AVARIA_OK)."""
     claim_id = str(claim_id or "")
-    write = WRITE_ENABLED or os.environ.get("DEVOL_REVIEW_OK") == "1"
+    write = os.environ.get("DEVOL_REVIEW_OK") == "1"
     if (not write) or claim_id.startswith("TESTE") or not claim_id:
         try:
             with open(DRYRUN_LOG, "a", encoding="utf-8") as f:
@@ -957,6 +952,48 @@ def save_etapa(oid, etapa, dados, perfil, nome, item=None):
         reg["atualizado_em"] = _now().strftime("%d/%m/%Y %H:%M")
         reg["ativo"] = {"nome": nome, "perfil": perfil, "ts": time.time()}
         _put_reg(oid, reg)
+        out = dict(reg)
+        out["status"] = compute_status(reg)
+        out["progresso"] = _progresso(reg)
+        return out
+
+
+def _etapa_foi_ao_ml(etapa, e):
+    """Texto de aviso se a etapa já mandou algo ao ML (desfazer aqui NÃO desfaz lá)."""
+    if etapa == "reclamacao_ml" and e.get("enviado") and e.get("modo") != "teste":
+        return "A reclamação desta etapa JÁ FOI ENVIADA ao Mercado Livre. Desfazer aqui não cancela a reclamação lá."
+    if etapa == "abertura" and e.get("desfecho") == "certo":
+        return "Nesta etapa o app já confirmou ao Mercado Livre que o produto chegou certo (\"Já revisei\"). Desfazer aqui não desfaz lá."
+    return None
+
+
+def desfazer_etapa(oid, etapa, perfil, nome, ciente_ml=False):
+    """Chamado #0313 — gestor desfaz a ÚLTIMA etapa concluída (as fotos ficam guardadas).
+    Só a última, pra nunca deixar etapa posterior apoiada numa anterior apagada.
+    Guarda o que foi desfeito em reg['desfeitas'] (quem, quando, conteúdo) — dá pra reverter."""
+    if perfil != "gestor":
+        return {"erro": "Só o gestor pode desfazer etapa."}
+    nome = (nome or "").strip()
+    if not nome:
+        return {"erro": "Informe seu nome."}
+    with _lock:
+        reg = _get_reg(oid)
+        if not reg:
+            return {"erro": "conferência não encontrada"}
+        et = reg.get("etapas", {})
+        feitas = [k for k in _req_etapas(reg) if k in et]
+        if not feitas or feitas[-1] != etapa:
+            return {"erro": f"Só dá pra desfazer a última etapa feita ({feitas[-1] if feitas else 'nenhuma'})."}
+        e = et[etapa]
+        aviso = _etapa_foi_ao_ml(etapa, e)
+        if aviso and not ciente_ml:
+            return {"precisa_ciente_ml": True, "aviso": aviso}
+        reg.setdefault("desfeitas", []).append({"etapa": etapa, "dados": e, "por": nome, "perfil": perfil,
+                                                "em": _now().strftime("%d/%m/%Y %H:%M"), "aviso_ml": aviso})
+        del et[etapa]
+        reg["atualizado_em"] = _now().strftime("%d/%m/%Y %H:%M")
+        _put_reg(oid, reg)
+        dbg(f"DESFAZER {oid} etapa={etapa} por={nome} ({perfil}) aviso_ml={'sim' if aviso else 'nao'}")
         out = dict(reg)
         out["status"] = compute_status(reg)
         out["progresso"] = _progresso(reg)
