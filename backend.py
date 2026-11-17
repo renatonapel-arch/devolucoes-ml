@@ -198,6 +198,11 @@ async def post_entrada(req: Request):
     return JSONResponse(ml.registrar_entrada(b.get("code"), b.get("nome", "?")))
 
 
+@app.get("/api/outros-canais")
+def outros_canais():
+    return JSONResponse(ml.outros_canais())
+
+
 @app.get("/api/entradas")
 def get_entradas(dia: str = None):
     return JSONResponse(ml.listar_entradas(dia))

@@ -9,6 +9,7 @@ NUNCA escreve no ML. Só GET.
 import os, re, json, time, threading
 from datetime import datetime, date, timezone, timedelta
 import requests
+import canais   # Shopee/loja (#1301) — isolado; desligado sem env DEVOL_CANAIS
 
 _BR = timezone(timedelta(hours=-3))   # horário de Brasília (Brasil não tem mais horário de verão)
 def _now():
@@ -507,7 +508,7 @@ def buscar(code, force_ml=False):
     # order_id canonico ja esta gravado; usa ele pra construir o item ao vivo.
     with _lock:
         e = _db.execute("SELECT order_id FROM entradas WHERE upper(codigo)=? AND order_id IS NOT NULL ORDER BY id DESC LIMIT 1", (up,)).fetchone()
-    if e and e["order_id"]:
+    if e and e["order_id"] and not canais.eh_outro(e["order_id"]):
         it = build_item(str(e["order_id"]))
         if it:
             return {"found": True, "in_list": False, "by": "entrada", "item": it}
@@ -541,6 +542,10 @@ def buscar(code, force_ml=False):
             it = build_item(str(po.get("id")))
             if it:
                 return {"found": True, "in_list": False, "by": "pack", "item": it}
+    # ML não achou: só agora tenta Shopee/loja (formatos que o ML não usa; desligado por padrão)
+    outro = canais.buscar(code)
+    if outro:
+        return outro
     return {"found": False, "in_list": False, "code": code,
             "hint": "Sem resultado por esse código. Tente o nº da venda (2000…), o cód. de envio (47…), o rastreio dos Correios (AP…BR) ou o nome do produto."}
 
@@ -834,7 +839,7 @@ def dbg(msg):
 def _req_etapas(reg):
     desf = (reg.get("etapas", {}).get("abertura") or {}).get("desfecho")
     base = ["chegada", "abertura", "nf_devolucao", "compensacao", "estoque"]
-    if desf in RUINS:
+    if desf in RUINS and ((reg.get("snapshot") or {}).get("canal") or "ml") != "loja":
         base.insert(2, "reclamacao_ml")
     return base
 
@@ -1031,7 +1036,7 @@ def lista():
         itens.append(it)
     # conferências já iniciadas que sumiram da lista ao vivo NÃO podem desaparecer
     for oid, reg in confs.items():
-        if oid in vistos:
+        if oid in vistos or canais.eh_outro(oid):
             continue
         st = compute_status(reg)
         if st == "nao_iniciada":
@@ -1054,6 +1059,29 @@ def lista():
 # ENTRADA NA DOCA (fase 1) — bipada rápida de "deu entrada", sem conferir.
 # Cria o carimbo REAL de chegada física. Não toca em conferências/etapas.
 # =====================================================================
+def outros_canais():
+    """Shopee/loja: conferências e entradas, FORA da lista e dos números do ML."""
+    confs = {oid: reg for oid, reg in _all_regs().items() if canais.eh_outro(oid)}
+    with _lock:
+        ents = _db.execute("SELECT order_id,codigo,produto,comprador,nome,em,ts FROM entradas "
+                           "WHERE order_id LIKE 'SHP-%' OR order_id LIKE 'LOJA-%' ORDER BY id DESC LIMIT 200").fetchall()
+    itens, vistos = [], set()
+    for oid, reg in confs.items():
+        snap = dict(reg.get("snapshot") or {})
+        snap["order_id"] = oid
+        snap["conf_status"] = compute_status(reg)
+        snap["conf_prog"] = _progresso(reg)
+        itens.append(snap); vistos.add(oid)
+    for r in ents:
+        if r["order_id"] in vistos:
+            continue
+        vistos.add(r["order_id"])
+        itens.append({"order_id": r["order_id"], "produto": r["produto"], "comprador": r["comprador"],
+                      "canal": "shopee" if r["order_id"].startswith("SHP-") else "loja",
+                      "conf_status": "nao_iniciada", "conf_prog": None, "chegou_em": r["em"]})
+    return {"ativos": sorted(canais.ativos()), "itens": itens}
+
+
 def registrar_entrada(code, nome):
     code = (code or "").strip()
     if not code:
@@ -1068,7 +1096,7 @@ def registrar_entrada(code, nome):
         # falha de bipagem não é chegada — não grava (Renato 2026-07-02)
         dbg(f"ENTRADA nao identificada (nao gravada) code={code} nome={nome}")
         return {"ok": False, "nao_identificado": True,
-                "erro": "Não achei essa devolução. Tente outra foto do código ou digite o nº da venda (2000…)."}
+                "erro": r.get("hint") if r.get("canal") else "Não achei essa devolução. Tente outra foto do código ou digite o nº da venda (2000…)."}
     with _lock:
         if oid:
             ja = _db.execute("SELECT em, nome FROM entradas WHERE order_id=? ORDER BY id DESC LIMIT 1",
@@ -1090,7 +1118,7 @@ def listar_entradas(dia=None):
     """Entradas de um dia (default hoje, dd/mm/aaaa)."""
     dia = dia or _now().strftime("%d/%m/%Y")
     with _lock:
-        rows = _db.execute("SELECT id,order_id,codigo,produto,comprador,nome,em,ts FROM entradas WHERE em LIKE ? ORDER BY id DESC",
+        rows = _db.execute("SELECT id,order_id,codigo,produto,comprador,nome,em,ts FROM entradas WHERE em LIKE ? AND (order_id IS NULL OR (order_id NOT LIKE 'SHP-%' AND order_id NOT LIKE 'LOJA-%')) ORDER BY id DESC",
                            (dia + "%",)).fetchall()
     return {"dia": dia, "total": len(rows), "itens": [dict(r) for r in rows]}
 
@@ -1101,7 +1129,7 @@ def visao_entradas(max_itens=500):
     updated_at (epoch do último save_etapa — quando concluída, é o instante da conclusão)."""
     agora = time.time()
     with _lock:
-        rows = _db.execute("SELECT order_id,codigo,produto,comprador,nome,em,ts FROM entradas ORDER BY id DESC LIMIT ?",
+        rows = _db.execute("SELECT order_id,codigo,produto,comprador,nome,em,ts FROM entradas WHERE (order_id IS NULL OR (order_id NOT LIKE 'SHP-%' AND order_id NOT LIKE 'LOJA-%')) ORDER BY id DESC LIMIT ?",
                            (max_itens,)).fetchall()
     dias = {}
     for r in rows:
@@ -1404,7 +1432,7 @@ def _watch_email_scan():
     for lote in lotes:
         nts = lote["notificado_ts"]
         with _lock:
-            bips = _db.execute("SELECT * FROM entradas WHERE ts > ? AND ts < ?", (nts, nts + 4 * 3600)).fetchall()
+            bips = _db.execute("SELECT * FROM entradas WHERE ts > ? AND ts < ? AND (order_id IS NULL OR (order_id NOT LIKE 'SHP-%' AND order_id NOT LIKE 'LOJA-%'))", (nts, nts + 4 * 3600)).fetchall()
         ultimo_bip = max([b["ts"] for b in bips], default=None)
         quiet_ok = bool(ultimo_bip) and (agora - ultimo_bip) / 60 >= WATCH_QUIET_RECON_MIN
         timeout_ok = (agora - nts) / 3600 >= WATCH_RECON_TIMEOUT_H

@@ -339,6 +339,7 @@
               </div>
             </div>
             <div class="sec-label"><span id="list-count">Aguardando recebimento</span><span style="color:var(--muted2)">toque p/ ver</span></div>
+            <div id="outros"></div>
             <div id="list"></div>
             <div style="height:14px"></div>
           </div>
@@ -541,11 +542,22 @@ async function renderFicha(d, by){
       <div class="hero-prod"><div class="thumb">${d.tipo==="nao_entrega"?"↩️":"📦"}</div>
         <div><h2>${d.produto}</h2>
           <div class="hero-sub">👤 ${d.comprador} · ${money(d.valor)}${d.qtd>1?` · ${d.qtd} un`:""}</div></div></div></div>`;
+  if(d.canal){ FICHA.hero += fichaCanal(d); }
   FICHA.blocks = "";   // dados de gestão (IDs, prazo, reembolso, reincidência) ficam só no painel do gestor
   paintFicha();
   document.getElementById("view-list").style.display="none";
   document.getElementById("view-ficha").style.display="flex";
   closeScan(true);
+}
+function fichaCanal(d){
+  const itens=(d.itens||[]).map(it=>{
+    const kit = it.kit && !it.kit.erro ? `<div style="font-size:11.5px;color:var(--muted);margin:2px 0 0 10px">Kit: ${(it.kit.comps||[]).map(c=>c.qtd+"× "+c.desc+" (SKU "+c.sku+")").join(" · ")||"composição no Catálogo"}</div>` : "";
+    return `<div style="padding:6px 0;border-top:1px solid var(--line)"><b>${it.qtd}×</b> ${it.descricao} <span class="mono" style="color:var(--muted)">· SKU ${it.sku_sige}${it.sku_sige!==it.sku?" (anúncio "+it.sku+")":""}</span>${kit}</div>`;
+  }).join("");
+  const alerta = d.kit_pendente ? `<div class="lockwarn">⚠️ Não consegui conferir no Catálogo se algum item é kit. Antes de concluir, confira a composição com o gestor.</div>` : "";
+  return `<div class="block"><div class="bh">${CANAL_TAG[d.canal]||d.canal} · pedido ${d.pedido_canal||""}</div>
+    <div style="font-size:12.5px;padding:0 2px 6px;color:var(--muted)">Tiny nº ${d.pedido_tiny||"—"} · NF no Tiny ${d.nf||"—"} (confira a nota válida no SIGE) · ${d.situacao_tiny||""}</div>
+    <div style="font-size:13px;padding:0 2px 4px"><div style="font-weight:800;margin-bottom:2px">O que deveria voltar:</div>${itens||"—"}</div>${alerta}</div>`;
 }
 async function reabrirFicha(){ return renderFicha(FICHA.d, FICHA.by); }
 async function recarregarConf(){ try{ FICHA.conf = await (await fetch("/api/conferencia/"+encodeURIComponent(FICHA.d.order_id))).json(); }catch(e){} }
@@ -554,7 +566,7 @@ function stepsList(){
   const desf=(et.abertura||{}).desfecho;
   const ruim=["avariado","trocado","faltando","vazio"].includes(desf);
   const arr=["chegada","abertura"];
-  if(ruim) arr.push("reclamacao_ml");
+  if(ruim && (FICHA.d||{}).canal!=="loja") arr.push("reclamacao_ml");
   arr.push("nf_devolucao","compensacao","estoque");
   return arr;
 }
@@ -772,11 +784,13 @@ async function doSearch(){
     const j=await r.json();
     if(j.found && j.item){ openItem(j.item, j.by==="ml"?"order_id":j.by); return; }
     h.textContent="Não encontrado";
+    if(j.canal){ alert("🔎 "+j.hint); h.textContent=old; return; }
     alert("🔎 Não achei pelo código \""+code+"\".\n\nTente assim:\n• Digite o nome do produto (ex: \"mola hb20\", \"filamento\")\n• Ou o nº da venda (2000…)\n• Ou bipe o OUTRO código de barras da etiqueta\n\nAlgumas devoluções (ex: Mercado Full) podem não aparecer aqui — nesse caso confira pela venda no painel do ML.");
   }catch(e){ alert("Erro: "+e); }
   h.textContent=old;
 }
 function openItem(item, by){
+  if(item.canal){ return renderFicha(item, by); }   // Shopee/loja: não entra na lista do ML
   let idx = DADOS.findIndex(d=>d.order_id===item.order_id);
   if(idx<0){ DADOS.push(item); idx = DADOS.length-1; }
   else { DADOS[idx]=item; }
@@ -855,7 +869,7 @@ function rotuloEstoque(x){return {volta:"📥 Voltou ao estoque",descarte:"🗑 
 function etapaWrap(n, titulo, done, body){
   return `<div class="etapa ${done?'done':''}"><div class="eh"><span class="en">${done?'✓':n}</span>${titulo}</div><div class="eb">${body}</div></div>`;
 }
-function passoNome(key){return {chegada:"📸 Prova de chegada",abertura:"🔍 Abrir e avaliar",reclamacao_ml:"⚖️ Reclamação no ML",nf_devolucao:"🧾 Nota de devolução (SIGE)",financeiro:"💰 Financeiro (SIGE)",compensacao:"🔄 Compensação (SIGE)",estoque:"📦 Estoque"}[key]||key;}
+function passoNome(key){ if(key==="reclamacao_ml" && (FICHA.d||{}).canal==="shopee") return "⚖️ Contestar na Shopee"; return {chegada:"📸 Prova de chegada",abertura:"🔍 Abrir e avaliar",reclamacao_ml:"⚖️ Reclamação no ML",nf_devolucao:"🧾 Nota de devolução (SIGE)",financeiro:"💰 Financeiro (SIGE)",compensacao:"🔄 Compensação (SIGE)",estoque:"📦 Estoque"}[key]||key;}
 function passoPerfil(key){return {chegada:"conferente",abertura:"conferente",reclamacao_ml:"conferente",nf_devolucao:"fiscal",financeiro:"fiscal",compensacao:"fiscal",estoque:"estoquista"}[key]||"";}
 function renderResumoConf(){
   const s=stepsList(); const et=(FICHA.conf&&FICHA.conf.etapas)||{};
@@ -956,6 +970,14 @@ function stepBody(key,d,et){
       <button class="desf" onclick="salvarAbertura('faltando')">📉 Faltando peças</button>
       <button class="desf" onclick="salvarAbertura('vazio')">📦 Caixa vazia</button>
       <button class="desf" onclick="salvarAbertura('garantia')">🛡️ Garantia (fornecedor)</button></div>`;
+  }
+  if(key==="reclamacao_ml" && d.canal==="shopee"){ const rc=et.reclamacao_ml||{};
+    if(rc.enviado && (!rc.resultado||rc.resultado==="aguardando")) return `<div class="donebadge" style="background:var(--brand-soft);color:var(--brand-d)">🟠 Aguardando resposta da Shopee · contestado por ${rc.nome||"?"} · ${rc.em||""}</div>
+      <div class="cs-desc" style="margin-top:10px">Quando a Shopee responder, registre o resultado:</div>
+      <div class="seg"><button onclick="salvarResultadoML('ganhamos')">✔ Ganhamos</button><button onclick="salvarResultadoML('perdemos')">✘ Perdemos</button></div>`;
+    return `<div class="lockwarn">⏰ A Shopee dá só <b>3 dias</b> depois que a peça chega pra contestar. Sem resposta, ela aceita a devolução e devolve o dinheiro ao comprador.</div>
+      <div class="cs-desc">Abra a devolução na <b>Central do Vendedor da Shopee</b> (pedido ${d.pedido_canal||""}), conteste com as fotos da avaria e depois registre aqui. O app <b>não</b> envia nada à Shopee.</div>
+      <div class="cta"><button class="cta-step" onclick="marcarContestadoShopee()">✔ Já contestei na Shopee</button></div>`;
   }
   if(key==="reclamacao_ml"){ const rc=et.reclamacao_ml||{};
     if(rc.enviado && (!rc.resultado||rc.resultado==="aguardando")) return `<div class="donebadge" style="background:var(--brand-soft);color:var(--brand-d)">🔵 Aguardando resposta do ML · enviado por ${rc.nome||"?"} · ${rc.em||""}</div>
@@ -1181,6 +1203,13 @@ async function enviarReclamacao(btn){
 }
 async function salvarResultadoML(res){ if(!requireUser())return; const r=await postEtapa("reclamacao_ml",{enviado:true,resultado:res}); if(!r||r.__erro)return; avancarPasso(r); }
 // "Já fiz direto no ML" — registra a etapa como feita pelo conferente, sem disparar nada na API do ML
+async function marcarContestadoShopee(){
+  if(!requireUser()) return;
+  if(!confirm("Confirmar: você já contestou essa devolução na Central do Vendedor da Shopee?")) return;
+  const r=await postEtapa("reclamacao_ml", {enviado:true, resultado:"aguardando", origem:"manual_shopee", canal:"shopee", modo:"teste"});
+  if(!r||r.__erro) return;
+  avancarPasso(r);
+}
 async function marcarFeitoNoML(etapa, descricao){
   if(!requireUser()) return;
   if(!confirm("Confirmar: você já fez isso direto no painel do Mercado Livre?\n\n"+descricao+"\n\nVou registrar como feito (sem enviar nada ao ML).")) return;
@@ -1225,7 +1254,24 @@ function sugerirMensagem(d){
 
 /* ===== CARGA AO VIVO (Fase 1, leitura) ===== */
 let _pollTimer = null;
+// ===== Outros canais (Shopee / loja) — bloco SEPARADO da lista do ML (#1301) =====
+const CANAL_TAG={shopee:"🟠 Shopee",loja:"🔵 Loja Napel"};
+let OUTROS=[];
+async function carregarOutros(){
+  const el=document.getElementById("outros"); if(!el) return;
+  try{ const j=await (await fetch("/api/outros-canais")).json(); OUTROS=(j.itens||[]).filter(d=>d.conf_status!=="concluida"); }
+  catch(e){ OUTROS=[]; }
+  if(!OUTROS.length){ el.innerHTML=""; return; }
+  el.innerHTML=`<div style="padding:10px 12px 2px;font-size:11.5px;font-weight:800;color:var(--muted)">SHOPEE E LOJA · ${OUTROS.length}</div>`+
+    OUTROS.map((d,i)=>{ const st=STATUS[d.conf_status]||STATUS.nao_iniciada;
+      return `<div class="dcard ${statusCardClass(d.conf_status)}" onclick="renderFicha(OUTROS[${i}],'order_id')">
+        <div class="stripe" style="background:${statusStripe(d.conf_status)}"></div>
+        <div class="top"><div class="prod">${d.produto||d.order_id}</div><div class="val">${d.valor!=null?money(d.valor):""}</div></div>
+        <div class="meta"><span class="tag">${CANAL_TAG[d.canal]||d.canal}</span><span class="cbadge ${st.cls}">${st.t}</span></div>
+        <div class="who"><span>👤 ${d.comprador||"—"}</span></div></div>`; }).join("");
+}
 async function carregar(refresh){
+  carregarOutros();
   const lista = document.getElementById("list");
   if(!DADOS.length){
     lista.innerHTML = `<div style="padding:30px 16px;text-align:center;color:var(--muted)">⏳ Carregando devoluções ao vivo do Mercado Livre…<br><small>(primeira carga após atualização pode levar ~1 min — fica nesta tela e atualiza sozinha)</small></div>`;

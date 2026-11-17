@@ -308,6 +308,10 @@ tbody tr:hover{background:var(--sky-bg)}
       <div style="padding:14px 20px 0"><div class="seg" id="ent-filters"></div></div>
       <div id="entradas-body"><div class="loading">Carregando…</div></div>
     </div>
+    <div class="card" id="outros-card" style="display:none;margin-top:16px">
+      <div class="card-head"><div class="t">Shopee e Loja</div><div class="n">devoluções de outros canais — fora dos números do Mercado Livre</div></div>
+      <div id="outros-body"></div>
+    </div>
   </div>
 
   <div id="tab-hist" style="display:none">
@@ -575,7 +579,8 @@ async function openConfDetail(oid){
   }catch(e){ body.innerHTML='<div class="loading" style="color:var(--err-fg)">Erro ao carregar.</div>'; return; }
   const d=DADOS.find(x=>String(x.order_id)===String(oid))||{}, et=reg.etapas||{};
   const ruim=["avariado","trocado","faltando","vazio"].includes((et.abertura||{}).desfecho);
-  const order=["chegada","abertura"]; if(ruim)order.push("reclamacao_ml"); order.push("nf_devolucao","compensacao","estoque");
+  const canal=(reg.snapshot||{}).canal;
+  const order=["chegada","abertura"]; if(ruim && canal!=="loja")order.push("reclamacao_ml"); order.push("nf_devolucao","compensacao","estoque");
   const cs=CONFST[reg.status]||CONFST.nao_iniciada;
   const ultima=[...order].reverse().find(k=>et[k]);   // #0313: só a última etapa feita pode ser desfeita
   const steps=order.map(k=>{
@@ -654,7 +659,19 @@ function showTab(t){
 
 // ===== Entradas na doca (chegada física bipada) =====
 let ENT_ITENS=[], filtroEnt="pendentes";
+// ===== Shopee / loja (#1301): bloco SEPARADO, não entra nos números do ML =====
+async function renderOutros(){
+  let j; try{ j=await (await fetch("/api/outros-canais")).json(); }catch(e){ return; }
+  const itens=j.itens||[], card=document.getElementById("outros-card");
+  if(!itens.length){ card.style.display="none"; return; }
+  card.style.display="block";
+  const TAG={shopee:"Shopee",loja:"Loja Napel"};
+  document.getElementById("outros-body").innerHTML=`<table><thead><tr><th>Canal</th><th>Produto</th><th>Comprador</th><th>Situação</th></tr></thead><tbody>`+
+    itens.map(d=>{ const cs=CONFST[d.conf_status]||CONFST.nao_iniciada;
+      return `<tr onclick="openConfDetail('${d.order_id}')" style="cursor:pointer"><td>${TAG[d.canal]||d.canal}</td><td>${d.produto||d.order_id}</td><td>${d.comprador||"—"}</td><td><span class="pill ${cs.c}">${cs.t}</span>${d.conf_prog?(" "+d.conf_prog.feito+"/"+d.conf_prog.total):""}</td></tr>`; }).join("")+`</tbody></table>`;
+}
 async function renderEntradas(){
+  renderOutros();
   const el=document.getElementById("entradas-body");
   let j;
   try{ j=await (await fetch("/api/entradas-visao")).json(); }

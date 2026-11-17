@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY backend.py ml.py ./
+COPY backend.py ml.py canais.py de_para_sku.json ./
 COPY static/ ./static/
 
 # dados persistentes (SQLite + anexos) ficam no volume
