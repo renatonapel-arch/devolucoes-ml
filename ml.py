@@ -226,6 +226,21 @@ def build_item(oid, origem="devolucao"):
         elif sub in ("returned", "returned_to_sender"):          # já voltou (no ML) — reconhece p/ o
             tipo, fase = "nao_entrega", "chegou"                 # conferente CONSEGUIR conferir AO BIPAR
             o["_chegou_em"] = ((sh.get("status_history") or {}).get("date_returned") or "")[:10] or None  # (não entra na lista automática)
+        elif sh.get("status") == "cancelled":
+            # #0328: o ML CANCELA o pedido quando a transportadora não consegue entregar
+            # (cancel_detail shipment_not_delivered, substatus ex.: service_unavailable) e o
+            # pacote volta à Napel. Trava: só se o envio SAIU (date_shipped) e o ML registrou
+            # não-entrega ou retorno — venda cancelada antes de despachar NÃO vira devolução.
+            hs = sh.get("status_history") or {}
+            if hs.get("date_shipped") and (hs.get("date_returned") or hs.get("date_not_delivered")):
+                tipo = "nao_entrega"
+                if hs.get("date_returned"):
+                    fase = "chegou"
+                    o["_chegou_em"] = hs["date_returned"][:10]
+                else:
+                    fase = "returning_to_sender"
+                if sh.get("tracking_number"):
+                    o["_ret_track"] = sh["tracking_number"]
 
     # 2) devolução via claim/mediação
     if tipo != "nao_entrega" and meds:
